@@ -1,59 +1,170 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Private Search Engine
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+## System Purpose
 
-## About Laravel
+This is a private, category specific search engine designed for personal use. It crawls, indexes, and serves search results for exactly five categories: Technology, Business, AI, Sports, and Politics.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+The system operates on a daily refresh cycle, ensuring all indexed data is fresh (maximum 5 days old) and relevant. It is built for local development and testing, with Google Drive serving as the canonical data store.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Architecture Overview
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+The system follows a pipeline architecture with distinct phases:
 
-## Learning Laravel
+```
+Crawl → Parse → Index → Cleanup → Upload → Cache → Serve
+```
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+### Components
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+**Laravel Orchestration Layer**  
+Laravel serves as the orchestration framework, providing job queuing, scheduling, and API routing. Business logic resides in dedicated service classes.
 
-## Laravel Sponsors
+**Crawler Service**  
+Implements polite, ethical web crawling with robots.txt compliance, per domain rate limiting, and comprehensive HTTP validation. Handles 429, 5xx, redirects, and timeouts gracefully.
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+**Parser Service**  
+Extracts structured data from raw HTML including title, canonical URL, meta description, and publish date. Implements URL normalization and duplicate detection via canonical URLs and content hashes.
 
-### Premium Partners
+**Indexer Service**  
+Groups parsed records by category, enforces minimum record count (1000 per category), removes data older than 5 days, and generates deterministic JSON output with metadata headers.
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+**Storage Service**  
+Manages JSON file lifecycle including generation, validation, upload to Google Drive, and integrity verification via checksums.
 
-## Contributing
+**Search API**  
+Versioned REST API that serves search results from local cache (synced from Google Drive) with support for pagination, category filtering, and graceful handling of stale or missing data.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+**Cache Manager**  
+Maintains local cache of index files downloaded from Google Drive for fast API serving. Implements atomic updates and cache invalidation.
 
-## Code of Conduct
+## Data Lifecycle
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### Daily Refresh Cycle
 
-## Security Vulnerabilities
+1. **Crawl Phase** (00:00 - 02:00)
+   - Queue crawl jobs for seed URLs across all categories
+   - Respect robots.txt and enforce rate limiting
+   - Validate HTTP responses and content types
+   - Store raw HTML temporarily
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+2. **Parse Phase** (02:00 - 03:00)
+   - Extract structured data from raw HTML
+   - Normalize URLs and detect duplicates
+   - Filter invalid records
+
+3. **Index Phase** (03:00 - 04:00)
+   - Group records by category
+   - Enforce minimum 1000 records per category
+   - Remove data older than 5 days
+   - Generate deterministic JSON files
+
+4. **Cleanup Phase** (04:00 - 04:30)
+   - Remove temporary crawl data
+   - Purge old index files
+
+5. **Upload Phase** (04:30 - 05:00)
+   - Upload validated JSON to Google Drive
+   - Verify upload integrity via checksums
+
+6. **Cache Refresh Phase** (05:00 - 05:30)
+   - Download latest index files from Google Drive
+   - Update local cache atomically
+
+7. **Serve Phase** (Always Active)
+   - API endpoints serve search results from local cache
+   - Handle stale or missing data gracefully
+
+### Data Retention
+
+- Maximum data age: 5 days
+- Minimum records per category: 1000
+- Index files older than 5 days are automatically purged
+- Google Drive is the source of truth
+
+## Category Rules
+
+The system supports exactly five categories. This list is immutable:
+
+1. **Technology** - Software, hardware, programming, tech industry news
+2. **Business** - Finance, markets, entrepreneurship, corporate news
+3. **AI** - Artificial intelligence, machine learning, AI research and applications
+4. **Sports** - All sports news, events, and analysis
+5. **Politics** - Political news, policy, elections, government
+
+Each category must maintain a minimum of 1000 valid, live records per day. If this threshold cannot be met, the system logs failure and does not upload incomplete data.
+
+## Security Posture
+
+### Authentication
+API endpoints are currently unauthenticated as this is a private, local development system. Production deployment would require API key authentication.
+
+### Rate Limiting
+- Crawling: Maximum 1 request per second per domain
+- API: 60 requests per minute per IP address
+
+### Data Privacy
+- No user tracking or analytics
+- No external service dependencies except Google Drive
+- All crawled data is publicly available web content
+
+### Secrets Management
+- Google Drive credentials stored in `.env` file (not committed to version control)
+- No production secrets used in local development
+
+## Known Limitations
+
+### Technical Limitations
+
+**JavaScript Heavy Sites**  
+The crawler does not execute JavaScript. Sites that render content dynamically via JavaScript will not be indexed correctly. This is a known tradeoff for performance and simplicity.
+
+**Crawl Coverage**  
+With rate limiting and polite crawling, achieving 1000+ records per category per day requires a substantial seed URL list. Initial setup may require manual curation of seed URLs.
+
+**Google Drive Dependency**  
+The system is entirely dependent on Google Drive for persistent storage. Google Drive outages will prevent uploads but will not affect search serving from local cache.
+
+**No Real Time Updates**  
+The system operates on a daily refresh cycle. Content published between refresh cycles will not be available until the next cycle completes.
+
+**Limited Search Features**  
+Search is basic keyword matching within the indexed JSON. No advanced features like fuzzy matching, stemming, or relevance ranking are implemented.
+
+### Operational Limitations
+
+**Local Development Only**  
+The system is designed for local development and testing. Production deployment would require additional hardening, monitoring, and infrastructure.
+
+**Manual Seed URL Management**  
+Seed URLs must be manually curated and maintained. There is no automatic discovery of new sources.
+
+**No Failure Notifications**  
+The system logs failures but does not send notifications. Monitoring must be manual or via log aggregation.
+
+## When Not to Use This System
+
+Do not use this system if you need:
+
+- Real time or near real time search results
+- Advanced search features (fuzzy matching, relevance ranking, faceted search)
+- JavaScript rendered content indexing
+- Automatic source discovery
+- Production grade reliability and monitoring
+- Multi user access with authentication
+- Categories beyond the five defined categories
+- Data retention beyond 5 days
+- Guaranteed minimum record counts (system may fail to meet 1000 record threshold)
+
+## Getting Started
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for local environment setup instructions.
+
+See [API.md](API.md) for API endpoint documentation.
+
+See [PHASES.md](PHASES.md) for implementation phase tracking.
+
+See [RULES.md](RULES.md) for system rules and constraints.
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+This is a private project for personal use. No license is granted for redistribution or commercial use.
