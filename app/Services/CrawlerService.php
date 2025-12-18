@@ -40,9 +40,14 @@ class CrawlerService
         $this->rateLimiter->wait($domain);
 
         try {
-            $response = Http::timeout(config('crawler.request_timeout', 10))
+            $timeout = config('crawler.request_timeout', 15);
+            $response = Http::timeout($timeout)
+                ->connectTimeout(min(5, $timeout))
+                ->withoutVerifying()
                 ->withHeaders([
                     'User-Agent' => config('crawler.user_agent'),
+                    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Language' => 'en-US,en;q=0.5',
                 ])
                 ->get($url);
 
@@ -105,11 +110,27 @@ class CrawlerService
             ];
 
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            Log::warning('Crawler connection error', [
+                'url' => $url,
+                'error' => $e->getMessage(),
+            ]);
+
             return [
                 'success' => false,
                 'error' => 'Connection timeout or network error',
                 'exception' => $e->getMessage(),
                 'should_retry' => true,
+            ];
+        } catch (\Illuminate\Http\Client\RequestException $e) {
+             Log::warning('Crawler request exception', [
+                'url' => $url,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'success' => false,
+                'error' => 'Request exception: ' . $e->getMessage(),
+                'should_retry' => str_contains($e->getMessage(), 'cURL error 28') || str_contains($e->getMessage(), 'timed out'),
             ];
         } catch (\Exception $e) {
             Log::error('Crawler exception', [

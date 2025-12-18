@@ -155,15 +155,64 @@ Do not use this system if you need:
 - Data retention beyond 5 days
 - Guaranteed minimum record counts (system may fail to meet 1000 record threshold)
 
-## Getting Started
+## Authentication (OAuth 2.0)
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for local environment setup instructions.
+This system uses **OAuth 2.0 Desktop Credentials** to integrate with your personal Google Drive storage. This provides a 15GB+ storage quota, bypassing the limitations of Service Accounts.
 
-See [API.md](API.md) for API endpoint documentation.
+1. Create a "Desktop" OAuth Client in Google Cloud Console.
+2. Save credentials to `storage/app/credentials/client_secret.json`.
+3. Run `php artisan google-drive:authorize` to log in via browser.
+4. Tokens are saved securely to `token.json` for persistent access.
 
-See [PHASES.md](PHASES.md) for implementation phase tracking.
+## Quick Start Commands
 
-See [RULES.md](RULES.md) for system rules and constraints.
+Run these commands in order to execute the full data lifecycle:
+
+1. **Authorize** (First time only):
+   ```bash
+   php artisan google-drive:authorize
+   ```
+
+2. **Crawl**: Start the daily crawl for all categories, or a specific one.
+   ```bash
+   # All categories
+   php artisan crawl:daily
+   
+   # Specific category
+   php artisan crawl:category technology
+   ```
+
+3. **Queue Worker**: Start the queue worker to process crawl jobs (run in a separate terminal).
+   ```bash
+   php artisan queue:work --stop-when-empty
+   
+   # To clear all pending jobs from the queue:
+   php artisan queue:clear
+   
+   # To see queue status and statistics:
+   php artisan queue:status
+   ```
+
+4. **Index**: Generate JSON search indexes once crawling is complete.
+   ```bash
+   php artisan index:generate
+   ```
+
+5. **Upload**: Sync your local search indexes to Google Drive.
+   ```bash
+   php artisan upload:index
+   ```
+
+6. **Search**: Start the server and visit `http://localhost:8000`.
+   ```bash
+   php artisan serve
+   ```
+
+## Documentation Reference
+
+- **[DEPLOYMENT.md](DEPLOYMENT.md)**: Detailed setup for OAuth and environment.
+- **[API.md](API.md)**: REST API documentation.
+- **[RULES.md](RULES.md)**: Core system constraints and category definitions.
 
 ## License
 

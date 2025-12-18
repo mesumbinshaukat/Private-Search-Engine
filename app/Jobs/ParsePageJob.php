@@ -12,13 +12,14 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Cache;
 
 class ParsePageJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $tries = 2;
-    public $timeout = 120;
+    public $tries = 3;
+    public $timeout = 300;
 
     private CrawlJob $crawlJob;
     private string $filename;
@@ -81,7 +82,63 @@ class ParsePageJob implements ShouldQueue
             'title' => $parsed['title'],
         ]);
 
+        $this->discoverLinks($parser, $html);
+
         Storage::delete($this->filename);
+    }
+
+    private function discoverLinks(ParserService $parser, string $html): void
+    {
+        $maxCrawls = config('crawler.max_crawls_per_category', 10);
+        $today = now()->format('Y-m-d');
+        $cacheKey = "crawl_count:{$this->crawlJob->category}:{$today}";
+
+        $currentCount = Cache::get($cacheKey, 0);
+        if ($currentCount >= $maxCrawls) {
+            return;
+        }
+
+        $links = $parser->extractLinks($html, $this->crawlJob->url);
+        $domain = parse_url($this->crawlJob->url, PHP_URL_HOST);
+        $normalizer = app(\App\Services\UrlNormalizer::class);
+
+        foreach ($links as $link) {
+            $link = $normalizer->normalize($link);
+            
+            if ($currentCount >= $maxCrawls) {
+                break;
+            }
+
+            // Only follow links within the same domain
+            if (parse_url($link, PHP_URL_HOST) !== $domain) {
+                continue;
+            }
+
+            // Check if URL has failed before (rate limited, etc)
+            if (Cache::has("failed_url:" . md5($link))) {
+                continue;
+            }
+
+            // Check if already crawled or queued
+            if (CrawlJob::where('url', $link)->exists()) {
+                continue;
+            }
+
+            // Check if already parsed (canonical URL check)
+            if (ParsedRecord::where('canonical_url', $link)->exists()) {
+                continue;
+            }
+
+            $newJob = CrawlJob::create([
+                'url' => $link,
+                'category' => $this->crawlJob->category,
+                'status' => CrawlJob::STATUS_PENDING,
+            ]);
+
+            CrawlPageJob::dispatch($newJob);
+            
+            $currentCount = Cache::increment($cacheKey);
+        }
     }
 
     public function failed(\Throwable $exception): void

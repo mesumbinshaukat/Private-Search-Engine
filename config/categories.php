@@ -7,10 +7,10 @@ return [
             'name' => 'Technology',
             'description' => 'Software, hardware, programming, tech industry news',
             'seed_urls' => [
-                'https://techcrunch.com',
-                'https://arstechnica.com',
+                'https://cnet.com/news',
+                'https://techspot.com',
                 'https://theverge.com',
-                'https://wired.com',
+                'https://wired.com/category/science',
                 'https://zdnet.com',
             ],
         ],
@@ -19,11 +19,11 @@ return [
             'name' => 'Business',
             'description' => 'Finance, markets, entrepreneurship, corporate news',
             'seed_urls' => [
-                'https://bloomberg.com',
-                'https://reuters.com/business',
-                'https://wsj.com',
-                'https://ft.com',
-                'https://forbes.com',
+                'https://businessinsider.com',
+                'https://cnbc.com/id/10001147',
+                'https://economist.com',
+                'https://forbes.com/business',
+                'https://entrepreneur.com',
             ],
         ],
         'ai' => [
@@ -33,9 +33,9 @@ return [
             'seed_urls' => [
                 'https://venturebeat.com/ai',
                 'https://technologyreview.com/topic/artificial-intelligence',
-                'https://artificialintelligence-news.com',
                 'https://aitrends.com',
                 'https://syncedreview.com',
+                'https://towardsdatascience.com',
             ],
         ],
         'sports' => [
@@ -47,7 +47,7 @@ return [
                 'https://bbc.com/sport',
                 'https://theguardian.com/sport',
                 'https://si.com',
-                'https://cbssports.com',
+                'https://nbcsports.com',
             ],
         ],
         'politics' => [
@@ -57,9 +57,9 @@ return [
             'seed_urls' => [
                 'https://politico.com',
                 'https://thehill.com',
-                'https://reuters.com/politics',
                 'https://bbc.com/news/politics',
                 'https://apnews.com/politics',
+                'https://vox.com/politics',
             ],
         ],
     ],

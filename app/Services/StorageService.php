@@ -35,31 +35,50 @@ class StorageService
             $result = $this->googleDrive->upload($metadata->file_path, $remoteName);
 
             if ($result['success']) {
-                $verified = $this->googleDrive->verify($result['file_id'], $metadata->checksum);
+                $fileId = $result['file_id'];
+                $verified = false;
+                $maxRetries = 3;
+                $retryDelay = 2; // seconds
+
+                for ($i = 0; $i < $maxRetries; $i++) {
+                    if ($i > 0) {
+                        sleep($retryDelay);
+                        Log::info("Retrying verification for {$metadata->category} (attempt " . ($i + 1) . ")");
+                    }
+
+                    if ($this->googleDrive->verify($fileId, $metadata->checksum)) {
+                        $verified = true;
+                        break;
+                    }
+                }
 
                 if ($verified) {
                     $metadata->update([
-                        'google_drive_file_id' => $result['file_id'],
+                        'google_drive_file_id' => $fileId,
                         'uploaded_at' => now(),
                     ]);
 
-                    Log::info('Index uploaded successfully', [
+                    Log::info('Index uploaded and verified successfully', [
                         'category' => $metadata->category,
-                        'file_id' => $result['file_id'],
+                        'file_id' => $fileId,
                     ]);
+
+                    // Automatically cleanup local file after successful upload
+                    Storage::delete($metadata->file_path);
 
                     return [
                         'success' => true,
-                        'file_id' => $result['file_id'],
+                        'file_id' => $fileId,
                     ];
                 } else {
-                    Log::error('Upload verification failed', [
+                    Log::error('Upload verification failed after retries', [
                         'category' => $metadata->category,
+                        'file_id' => $fileId,
                     ]);
 
                     return [
                         'success' => false,
-                        'error' => 'Upload verification failed',
+                        'error' => 'Upload verification failed after retries',
                     ];
                 }
             }

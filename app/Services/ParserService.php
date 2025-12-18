@@ -15,6 +15,66 @@ class ParserService
         $this->urlNormalizer = $urlNormalizer;
     }
 
+    public function extractLinks(string $html, string $baseUrl): array
+    {
+        try {
+            libxml_use_internal_errors(true);
+            $dom = new DOMDocument();
+            $dom->loadHTML(mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8'));
+            libxml_clear_errors();
+
+            $xpath = new DOMXPath($dom);
+            $links = $xpath->query('//a[@href]/@href');
+            $absoluteLinks = [];
+
+            foreach ($links as $link) {
+                $href = trim($link->nodeValue);
+                if (empty($href) || str_starts_with($href, '#') || str_starts_with($href, 'javascript:')) {
+                    continue;
+                }
+
+                $absoluteUrl = $this->makeAbsolute($href, $baseUrl);
+                if ($absoluteUrl) {
+                    $absoluteLinks[] = $this->urlNormalizer->normalize($absoluteUrl);
+                }
+            }
+
+            return array_unique($absoluteLinks);
+
+        } catch (\Exception $e) {
+            Log::error('Link extraction exception', [
+                'base_url' => $baseUrl,
+                'error' => $e->getMessage(),
+            ]);
+            return [];
+        }
+    }
+
+    private function makeAbsolute(string $url, string $baseUrl): ?string
+    {
+        if (parse_url($url, PHP_URL_SCHEME) != '') {
+            return $url;
+        }
+
+        $base = parse_url($baseUrl);
+        if (!isset($base['scheme']) || !isset($base['host'])) {
+            return null;
+        }
+
+        if (str_starts_with($url, '//')) {
+            return $base['scheme'] . ':' . $url;
+        }
+
+        if (str_starts_with($url, '/')) {
+            return $base['scheme'] . '://' . $base['host'] . $url;
+        }
+
+        $path = $base['path'] ?? '/';
+        $path = preg_replace('#/[^/]*$#', '/', $path);
+        
+        return $base['scheme'] . '://' . $base['host'] . $path . $url;
+    }
+
     public function parse(string $html, string $originalUrl): ?array
     {
         try {

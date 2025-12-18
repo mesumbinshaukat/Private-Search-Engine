@@ -27,4 +27,6 @@ return [
     'retry_delay' => env('CRAWLER_RETRY_DELAY', 5),
     
     'exponential_backoff_multiplier' => env('CRAWLER_BACKOFF_MULTIPLIER', 2),
+
+    'max_crawls_per_category' => env('CRAWLER_MAX_CRAWLS_PER_CATEGORY', 10),
 ];

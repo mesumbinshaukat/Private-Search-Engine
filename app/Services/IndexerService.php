@@ -13,7 +13,7 @@ class IndexerService
     {
         $date = $date ?? now()->format('Y-m-d');
         $maxAgeDays = config('indexer.max_data_age_days', 5);
-        $minRecords = config('indexer.min_records_per_category', 1000);
+        $minRecords = config('indexer.min_records_per_category', 10);
 
         $records = ParsedRecord::forCategory($category)
             ->newerThan($maxAgeDays)
@@ -42,14 +42,20 @@ class IndexerService
 
         Storage::put($filename, $jsonString);
 
-        $metadata = IndexMetadata::updateOrCreate(
-            ['category' => $category, 'date' => $date],
-            [
-                'record_count' => $records->count(),
-                'file_path' => $filename,
-                'checksum' => $checksum,
-            ]
-        );
+        $metadata = IndexMetadata::where('category', $category)
+            ->where('date', $date)
+            ->first();
+
+        if (!$metadata) {
+            $metadata = new IndexMetadata();
+            $metadata->category = $category;
+            $metadata->date = $date;
+        }
+
+        $metadata->record_count = $records->count();
+        $metadata->file_path = $filename;
+        $metadata->checksum = $checksum;
+        $metadata->save();
 
         Log::info('Index generated', [
             'category' => $category,

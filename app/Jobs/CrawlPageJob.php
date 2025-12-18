@@ -15,9 +15,9 @@ class CrawlPageJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $tries = 3;
-    public $timeout = 300;
-    public $backoff = [5, 15, 60];
+    public $tries = 5;
+    public $timeout = 600;
+    public $backoff = [10, 30, 120, 600];
 
     private CrawlJob $crawlJob;
 
@@ -52,6 +52,24 @@ class CrawlPageJob implements ShouldQueue
 
             ParsePageJob::dispatch($this->crawlJob, $result['filename']);
         } else {
+            // Don't retry rate limit errors (429) - mark as failed immediately
+            if (isset($result['http_status']) && $result['http_status'] === 429) {
+                $this->crawlJob->update([
+                    'status' => CrawlJob::STATUS_FAILED,
+                    'http_status' => 429,
+                    'failed_reason' => 'Rate limited by server (429)',
+                ]);
+                
+                // Cache this URL as rate-limited to prevent re-queuing
+                \Illuminate\Support\Facades\Cache::put("failed_url:" . md5($this->crawlJob->url), true, now()->addDay());
+                
+                Log::warning('URL rate limited, marked as failed and cached', [
+                    'url' => $this->crawlJob->url,
+                ]);
+                
+                return; // Don't retry
+            }
+
             $this->crawlJob->update([
                 'status' => CrawlJob::STATUS_FAILED,
                 'http_status' => $result['http_status'] ?? null,
@@ -80,6 +98,9 @@ class CrawlPageJob implements ShouldQueue
             'status' => CrawlJob::STATUS_FAILED,
             'failed_reason' => 'Job failed after retries: ' . $exception->getMessage(),
         ]);
+
+        // Cache this URL as permanently failed
+        \Illuminate\Support\Facades\Cache::put("failed_url:" . md5($this->crawlJob->url), true, now()->addDay());
 
         Log::error('Crawl job failed permanently', [
             'url' => $this->crawlJob->url,

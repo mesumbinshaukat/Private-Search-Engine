@@ -74,7 +74,7 @@ class RobotsTxtParser
 
         return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($robotsTxtUrl) {
             try {
-                $response = Http::timeout(5)->get($robotsTxtUrl);
+                $response = Http::timeout(5)->withoutVerifying()->get($robotsTxtUrl);
 
                 if ($response->successful()) {
                     return $response->body();

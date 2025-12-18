@@ -34,6 +34,7 @@ class SearchController extends Controller
             }
 
             $paginated = $this->paginateResults($results, $page, $perPage);
+            $indexDate = $this->getLatestIndexDate($results, $category);
 
             return response()->json([
                 'status' => 'success',
@@ -47,7 +48,7 @@ class SearchController extends Controller
                     'version' => 'v1',
                     'timestamp' => now()->toIso8601String(),
                     'cache_age_seconds' => $this->getCacheAge(),
-                    'index_date' => now()->format('Y-m-d'),
+                    'index_date' => $indexDate,
                 ],
             ]);
 
@@ -144,5 +145,18 @@ class SearchController extends Controller
 
         $lastModified = Storage::lastModified($cacheFile);
         return time() - $lastModified;
+    }
+
+    private function getLatestIndexDate(array $results, string $category): string
+    {
+        $query = \App\Models\IndexMetadata::query();
+
+        if ($category !== 'all') {
+            $query->where('category', $category);
+        }
+
+        $latestDate = $query->latest('date')->value('date');
+
+        return $latestDate ? $latestDate->format('Y-m-d') : now()->format('Y-m-d');
     }
 }

@@ -64,18 +64,19 @@ DB_DATABASE=/absolute/path/to/database/database.sqlite
 
 QUEUE_CONNECTION=database
 
-GOOGLE_DRIVE_MOCK=true
-GOOGLE_DRIVE_MOCK_PATH=storage/app/google_drive_mock
-GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON=storage/app/credentials/service-account.json
+GOOGLE_DRIVE_MOCK=false
+GOOGLE_DRIVE_CLIENT_SECRET_JSON=storage/app/credentials/client_secret.json
+GOOGLE_DRIVE_TOKEN_JSON=storage/app/credentials/token.json
 GOOGLE_DRIVE_FOLDER_ID=your_folder_id_here
 
 CRAWLER_MAX_CONCURRENT_JOBS=10
-CRAWLER_REQUEST_TIMEOUT=10
+CRAWLER_REQUEST_TIMEOUT=15
 CRAWLER_MAX_PAGE_SIZE=5242880
 CRAWLER_RATE_LIMIT_PER_DOMAIN=1
+CRAWLER_MAX_CRAWLS_PER_CATEGORY=50
 CRAWLER_USER_AGENT="PrivateSearchBot/1.0 (Personal Use; +http://localhost:8000/bot)"
 
-INDEXER_MIN_RECORDS_PER_CATEGORY=1000
+INDEXER_MIN_RECORDS_PER_CATEGORY=5
 INDEXER_MAX_DATA_AGE_DAYS=5
 
 API_RATE_LIMIT_PER_MINUTE=60
@@ -135,58 +136,42 @@ The mock service will:
 - Generate mock file IDs
 - Validate checksums locally
 
-### Production Environment (Service Account Authentication)
+### 1. Google Drive API Setup (OAuth 2.0 Desktop)
 
-**MANDATORY:** This system uses Service Account authentication only. OAuth refresh tokens are forbidden.
+1.  Go to the [Google Cloud Console](https://console.cloud.google.com/).
+2.  Enable the **Google Drive API**.
+3.  Create **OAuth 2.0 Desktop Credentials**:
+    -   Go to "APIs & Services" > "Credentials".
+    -   Click "Create Credentials" > "OAuth client ID".
+    -   Select "Desktop app".
+    -   Download the JSON file and rename it to `client_secret.json`.
+4.  Place `client_secret.json` in `storage/app/credentials/`.
+5.  Run the authorization command:
+    ```bash
+    php artisan google-drive:authorize
+    ```
+6.  Follow the link, authorize, and paste the code into the terminal.
+7.  The system will save `token.json` automatically.
 
-For production deployment with actual Google Drive integration:
+### 2. Environment Configuration
 
-1. **Create Google Cloud Project**
-   - Go to Google Cloud Console
-   - Create new project
-   - Enable Google Drive API
-
-2. **Create Service Account**
-   - Navigate to IAM & Admin > Service Accounts
-   - Create new service account
-   - Grant necessary permissions
-   - Create and download JSON key file
-
-3. **Share Google Drive Folder**
-   - Create a folder in Google Drive
-   - Share the folder with the service account email address
-   - Grant Editor permissions
-   - Copy the folder ID from the URL
-
-4. **Configure Service Account**
-
-   Place the downloaded JSON key file in your project:
-
-   ```bash
-   mkdir -p storage/app/credentials
-   # Copy service-account.json to storage/app/credentials/
-   chmod 600 storage/app/credentials/service-account.json
-   ```
-
-5. **Configure Environment Variables**
+Update your `.env` file:
 
 ```env
 GOOGLE_DRIVE_MOCK=false
-GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON=storage/app/credentials/service-account.json
-GOOGLE_DRIVE_FOLDER_ID=your_actual_folder_id
+GOOGLE_DRIVE_CLIENT_SECRET_JSON=storage/app/credentials/client_secret.json
+GOOGLE_DRIVE_TOKEN_JSON=storage/app/credentials/token.json
+GOOGLE_DRIVE_FOLDER_ID=your_folder_id_here
 ```
 
-6. **Verify Permissions**
+### 3. Permissions
 
-   Ensure the service account JSON includes the following scopes:
-   - `https://www.googleapis.com/auth/drive.file`
-   - `https://www.googleapis.com/auth/drive`
+Unlike Service Accounts, OAuth 2.0 uses **your personal storage quota**. Ensure the folder you use is owned by or shared with your account with "Editor" permissions.
 
 **Security Notes:**
-- Never commit the service account JSON file to version control
+- Never commit the `client_secret.json` or `token.json` files to version control
 - Add `storage/app/credentials/` to `.gitignore`
-- Rotate service account keys periodically
-- Use environment specific service accounts for production
+- Rotate client secrets if compromised
 
 ## Queue and Scheduler Configuration
 
@@ -328,7 +313,7 @@ php artisan migrate:status
 sudo supervisorctl start private-search-queue:*
 
 # If running manually
-php artisan queue:work --tries=3 --timeout=300
+php artisan queue:work --tries=3 --timeout=600
 ```
 
 4. **Start Application Server**
@@ -339,9 +324,7 @@ php artisan serve
 
 5. **Verify System Health**
 
-```bash
-php artisan health:check
-```
+Check `http://localhost:8000/api/v1/health`
 
 ## Failure Recovery
 
@@ -351,16 +334,17 @@ php artisan health:check
 
 **Recovery Steps:**
 
-1. Check failed jobs:
+1. Check queue status:
 
 ```bash
-php artisan queue:failed
+php artisan queue:status
 ```
 
 2. Inspect failure reasons in logs:
 
 ```bash
-tail -f storage/logs/laravel.log
+# Windows (PowerShell)
+Get-Content -Path storage/logs/laravel.log -Tail 100
 ```
 
 3. Retry failed jobs:
@@ -372,28 +356,8 @@ php artisan queue:retry all
 4. If jobs continue failing, clear queue and restart:
 
 ```bash
-php artisan queue:flush
+php artisan queue:clear
 php artisan crawl:daily
-```
-
-### Parser Failure Recovery
-
-**Symptom:** Parse jobs failing or producing invalid output
-
-**Recovery Steps:**
-
-1. Check parse error logs:
-
-```bash
-grep "ParseError" storage/logs/laravel.log
-```
-
-2. Identify problematic URLs and add to blacklist
-
-3. Retry parsing:
-
-```bash
-php artisan parse:retry
 ```
 
 ### Indexer Failure Recovery
@@ -405,19 +369,20 @@ php artisan parse:retry
 1. Check indexer logs:
 
 ```bash
-grep "IndexerError" storage/logs/laravel.log
+# Windows (PowerShell)
+Get-Content -Path storage/logs/laravel.log -Tail 100 | Select-String "indexer"
 ```
 
 2. Verify parsed record counts per category:
 
 ```bash
-php artisan index:stats
+php artisan queue:status
 ```
 
-3. If below threshold, trigger additional crawl:
+3. If below threshold, trigger additional crawl for that category:
 
 ```bash
-php artisan crawl:category Technology --count=500
+php artisan crawl:category technology
 ```
 
 4. Retry indexing:
@@ -432,28 +397,17 @@ php artisan index:generate
 
 **Recovery Steps:**
 
-1. Check upload logs:
+1. Check upload logs for verification errors:
 
 ```bash
-grep "UploadError" storage/logs/laravel.log
+# Windows (PowerShell)
+Get-Content -Path storage/logs/laravel.log -Tail 100 | Select-String "upload"
 ```
 
-2. Verify Google Drive credentials:
+2. Retry upload command:
 
 ```bash
-php artisan google-drive:test
-```
-
-3. Check local index files exist:
-
-```bash
-ls -lh storage/app/index/
-```
-
-4. Retry upload:
-
-```bash
-php artisan upload:retry
+php artisan upload:index
 ```
 
 ### Cache Desync Recovery
@@ -466,18 +420,6 @@ php artisan upload:retry
 
 ```bash
 php artisan cache:refresh --force
-```
-
-2. Verify cache integrity:
-
-```bash
-php artisan cache:verify
-```
-
-3. If cache corrupted, rebuild from Google Drive:
-
-```bash
-php artisan cache:rebuild
 ```
 
 ### Queue Worker Crash Recovery
@@ -645,29 +587,22 @@ Configure log rotation in `config/logging.php`:
 
 ### Health Check
 
-```bash
-php artisan health:check
-```
+Access the health endpoint: `GET http://localhost:8000/api/v1/health`
 
 Returns:
-- Database connectivity
-- Queue worker status
-- Cache status
-- Google Drive connectivity
-- Disk space
+- Database connectivity status
+- Cache readiness and age
+- API operational status
+- System uptime
 
 ### Performance Monitoring
 
-```bash
-php artisan stats:show
-```
+Access the statistics endpoint: `GET http://localhost:8000/api/v1/stats`
 
 Returns:
-- Crawl statistics
-- Parse statistics
-- Index statistics
-- API request statistics
-- Cache hit rate
+- Crawl statistics (success rate, counts)
+- Index statistics (record counts, generation dates)
+- API request metrics
 
 ## Troubleshooting
 

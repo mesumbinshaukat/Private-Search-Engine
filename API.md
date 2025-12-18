@@ -121,13 +121,17 @@ GET /api/v1/search?q=artificial+intelligence&category=ai&page=1&per_page=20
       "has_previous": false
     }
   },
-  "meta": {
+    "meta": {
     "version": "v1",
     "timestamp": "2025-12-17T21:33:24+05:00",
     "cache_age_seconds": 3600,
     "index_date": "2025-12-17"
   }
 }
+
+**Meta Field Notes:**
+- `index_date`: The generation date of the most recent index represented in the results (YYYY-MM-DD).
+- `cache_age_seconds`: Seconds since the local cache file was last modified.
 ```
 
 **Response Codes:**

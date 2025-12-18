@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'min_records_per_category' => env('INDEXER_MIN_RECORDS_PER_CATEGORY', 1000),
+    'min_records_per_category' => env('INDEXER_MIN_RECORDS_PER_CATEGORY', 5),
     
     'max_data_age_days' => env('INDEXER_MAX_DATA_AGE_DAYS', 5),
     
