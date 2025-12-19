@@ -20,12 +20,8 @@ class CrawlDailyCommand extends Command
 
         $this->info('Starting daily crawl for categories: ' . implode(', ', $categories));
 
-        // Truncate crawl jobs to start fresh logs for this cycle (SQLite safe)
-        if (config('database.default') === 'sqlite') {
-            \Illuminate\Support\Facades\DB::table('crawl_jobs')->delete();
-        } else {
-            \App\Models\CrawlJob::truncate();
-        }
+        // Delete previous jobs for these categories only
+        \App\Models\CrawlJob::whereIn('category', $categories)->delete();
 
         $totalJobs = 0;
 

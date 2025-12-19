@@ -18,9 +18,31 @@ class MasterRefreshCommand extends Command
             MasterRefreshJob::dispatch();
             $this->info('✓ MasterRefreshJob dispatched to queue.');
         } else {
-            $this->info('Running MasterRefreshJob synchronously...');
-            MasterRefreshJob::dispatchSync();
-            $this->info('✓ Master Refresh Cycle completed.');
+            $this->info('Running Master Refresh Cycle synchronously...');
+
+            $commands = [
+                ['name' => 'crawl:daily', 'params' => []],
+                ['name' => 'queue:work', 'params' => ['--stop-when-empty' => true]],
+                ['name' => 'index:generate', 'params' => []],
+                ['name' => 'upload:index', 'params' => []],
+                ['name' => 'cache:refresh', 'params' => []],
+                ['name' => 'queue:status', 'params' => []],
+            ];
+
+            foreach ($commands as $cmd) {
+                $this->newLine();
+                $this->info(">>> Executing Step: {$cmd['name']}");
+                
+                $exitCode = $this->call($cmd['name'], $cmd['params']);
+                
+                if ($exitCode !== 0) {
+                    $this->error("✗ Step {$cmd['name']} failed. Aborting refresh.");
+                    return Command::FAILURE;
+                }
+            }
+
+            $this->newLine();
+            $this->info('✓ Master Refresh Cycle completed successfully.');
         }
 
         return Command::SUCCESS;
