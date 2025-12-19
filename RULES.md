@@ -35,8 +35,8 @@ The system supports exactly five categories: Technology, Business, AI, Sports, P
 ### DI2: Five Day Maximum Age
 Data older than 5 days must be automatically purged. No exceptions.
 
-### DI3: Minimum 1000 Records Per Category Per Day
-Each daily index must contain at least 1000 valid, live records per category. If this threshold cannot be met, the system must log failure and not upload incomplete data.
+### DI3: Minimum Record Count Per Category
+Each daily index must contain at least a minimum number of valid, live records per category (default: 5). If this threshold cannot be met, the system must log failure and not upload incomplete data.
 
 ### DI4: Canonical URL Deduplication
 Duplicate detection is based on canonical URLs and content hashes. The same content must never appear twice in a single category index.

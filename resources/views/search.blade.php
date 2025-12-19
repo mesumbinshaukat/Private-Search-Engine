@@ -371,6 +371,37 @@
             });
         });
 
+        function renderResults(results) {
+            resultsContainer.innerHTML = results.map(item => {
+                let scoreColor = '#10b981'; // Green (8-10)
+                if (item.match_score < 4) scoreColor = '#ef4444'; // Red (1-3)
+                else if (item.match_score < 8) scoreColor = '#f59e0b'; // Yellow (4-7)
+
+                const description = item.highlighted_description || item.description || 'No description available.';
+
+                return `
+                <div class="result-card">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <span class="url">${item.url}</span>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            ${item.confidence ? `<span style="font-size: 0.75rem; color: var(--text-muted);">Conf: ${(item.confidence * 100).toFixed(0)}%</span>` : ''}
+                            <span class="badge" style="background: ${scoreColor}20; color: ${scoreColor}; border: 1px solid ${scoreColor}40;">
+                                Match: ${item.match_score || '0'}/10
+                            </span>
+                        </div>
+                    </div>
+                    <h3><a href="${item.url}" target="_blank">${item.title}</a></h3>
+                    <p class="description">${description}</p>
+                    <div class="meta-info">
+                        <span class="badge">${item.category}</span>
+                        <span>Published ${item.published_at ? new Date(item.published_at).toLocaleDateString() : 'N/A'}</span>
+                        <span style="margin-left: auto; font-size: 0.75rem; color: var(--text-muted);">Rel: ${item.relevance_score?.toFixed(2) || '0'}</span>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
         async function performSearch() {
             const query = searchInput.value.trim();
             if (!query) return;
@@ -388,9 +419,19 @@
                 if (data.status === 'success' && data.data.results.length > 0) {
                     renderResults(data.data.results);
                 } else {
+                    let suggestionHtml = '';
+                    if (data.error && data.error.query_suggestions && data.error.query_suggestions.length > 0) {
+                        suggestionHtml = `
+                            <div style="margin-top: 1rem; font-size: 0.875rem;">
+                                Did you mean: ${data.error.query_suggestions.map(s => `<a href="#" onclick="searchInput.value='${s}'; performSearch(); return false;" style="color: var(--primary); text-decoration: underline; margin-right: 0.5rem;">${s}</a>`).join('')}
+                            </div>
+                        `;
+                    }
+
                     resultsContainer.innerHTML = `
                         <div style="text-align: center; color: var(--text-muted); margin-top: 4rem;">
                             <p>No results found for "${query}" in ${currentCategory === 'all' ? 'all categories' : currentCategory}</p>
+                            ${suggestionHtml}
                         </div>
                     `;
                 }
@@ -398,31 +439,6 @@
                 spinner.style.display = 'none';
                 resultsContainer.innerHTML = '<p style="color: #ef4444; text-align: center;">Connectivity error. Please try again.</p>';
             }
-        }
-
-        function renderResults(results) {
-            resultsContainer.innerHTML = results.map(item => {
-                let scoreColor = '#10b981'; // Green (8-10)
-                if (item.match_score < 4) scoreColor = '#ef4444'; // Red (1-3)
-                else if (item.match_score < 8) scoreColor = '#f59e0b'; // Yellow (4-7)
-
-                return `
-                <div class="result-card">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <span class="url">${item.url}</span>
-                        <span class="badge" style="background: ${scoreColor}20; color: ${scoreColor}; border: 1px solid ${scoreColor}40;">
-                            Match: ${item.match_score}/10
-                        </span>
-                    </div>
-                    <h3><a href="${item.url}" target="_blank">${item.title}</a></h3>
-                    <p class="description">${item.description || 'No description available.'}</p>
-                    <div class="meta-info">
-                        <span class="badge">${item.category}</span>
-                        <span>Indexed ${new Date(item.indexed_at).toLocaleDateString()}</span>
-                    </div>
-                </div>
-                `;
-            }).join('');
         }
 
         searchButton.addEventListener('click', performSearch);

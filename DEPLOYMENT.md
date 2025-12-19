@@ -639,6 +639,62 @@ While this system is designed for local development, production deployment would
 9. **Firewall:** Restrict API access to authorized IPs
 10. **Secrets Management:** Use environment specific secret management
 
+## Shared Hosting Deployment
+
+Deploying Laravel on shared hosting requires specific adjustments due to the lack of `sudo` permissions and process managers like Supervisor.
+
+### 1. Requirements
+- **PHP 8.2+**: Ensure your hosting panel (cPanel, etc.) is set to the correct PHP version.
+- **SQLite**: No special configuration needed. Ensure `database/database.sqlite` is writable.
+
+### 2. Folder Structure
+For security, keep the core project files OUTSIDE of your `public_html` directory:
+```
+/home/username/
+├── private-search-engine/ (Core files)
+└── public_html/ (Symlinked or copied from project/public)
+```
+
+**Option A: Symlink (Recommended)**
+If your host allows symlinks, delete `public_html` and create a symlink:
+```bash
+ln -s /home/username/private-search-engine/public /home/username/public_html
+```
+
+**Option B: Manual Move**
+If symlinks aren't allowed, move everything from `public/` into `public_html/` and update `index.php` paths:
+```php
+// index.php
+require __DIR__.'/../private-search-engine/vendor/autoload.php';
+$app = require_once __DIR__.'/../private-search-engine/bootstrap/app.php';
+```
+
+### 3. Background Tasks (Cron Jobs)
+Since you cannot run Supervisor, use Cron jobs to handle the Scheduler and the Queue.
+
+**Step 1: The Scheduler**
+This runs the daily refresh cycle.
+```cron
+* * * * * /usr/local/bin/php /home/username/private-search-engine/artisan schedule:run >> /dev/null 2>&1
+```
+
+**Step 2: The Queue Worker**
+On shared hosting, the queue worker cannot run indefinitely. Use the `--stop-when-empty` flag in a cron job that runs every minute.
+```cron
+* * * * * /usr/local/bin/php /home/username/private-search-engine/artisan queue:work --stop-when-empty --tries=3 >> /dev/null 2>&1
+```
+*Note: This ensures that if there are jobs, they get processed. If not, the process exits cleanly.*
+
+### 4. Permissions
+Ensure the following directories are writable by the web server (usually permission 755 or 775):
+- `storage/`
+- `bootstrap/cache/`
+
+### 5. Environment Specifics
+Set `APP_DEBUG=false` and `APP_ENV=production` in your `.env`.
+
+---
+
 ## Security Checklist
 
 - [ ] `.env` file not committed to version control

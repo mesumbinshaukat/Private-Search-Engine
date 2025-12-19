@@ -77,44 +77,50 @@ Authorization: Bearer {api_key}
 
 Search across all categories or filter by specific category.
 
-**Endpoint:** `GET /api/v1/search`
+**Endpoint:**### Search Results (`GET /api/v1/search`)
 
-**Query Parameters:**
+Performs a relevance-ranked search across indexed categories.
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `q` | string | Yes | - | Search query string |
-| `category` | string | No | all | Category filter: `technology`, `business`, `ai`, `sports`, `politics`, or `all` |
-| `page` | integer | No | 1 | Page number for pagination (1-indexed) |
-| `per_page` | integer | No | 20 | Results per page (max 100) |
+#### Query Parameters
+| Parameter   | Type    | Required | Description |
+| :---------- | :------ | :------- | :----------- |
+| `q`         | string  | Yes      | Search query. Supports logical operators (`AND`, `OR`, `NOT`) and exact phrases (`""`). |
+| `category`  | string  | No       | Filter by category (`technology`, `business`, etc.). Default: `all`. |
+| `from_date` | date    | No       | Filter results published on or after (YYYY-MM-DD). |
+| `to_date`   | date    | No       | Filter results published on or before (YYYY-MM-DD). |
+| `sort`      | string  | No       | `relevance` (default), `date_desc`, `date_asc`. |
+| `page`      | integer | No       | Page number for pagination. Default: `1`. |
+| `per_page`  | integer | No       | Results per page. Default: `20`. |
+| `debug`     | boolean | No       | If `true`, returns verbose explanation of scoring. |
 
-**Request Example:**
-
-```bash
-GET /api/v1/search?q=artificial+intelligence&category=ai&page=1&per_page=20
-```
-
-**Response Schema:**
+#### Success Response
+- **Code**: 200 OK
+- **Schema**:
+    - `results`: Array of objects including `relevance_score`, `confidence`, and `highlighted_description`.
+    - `query_suggestions`: (Optional) Included in 404 responses.
 
 ```json
 {
   "status": "success",
   "data": {
     "query": "artificial intelligence",
-    "category": "ai",
+    "category": "all",
     "results": [
       {
         "title": "Article Title",
         "url": "https://example.com/article",
         "description": "Meta description or excerpt",
+        "highlighted_description": "<mark>artificial</mark> <mark>intelligence</mark> is...",
         "published_at": "2025-12-15T10:30:00Z",
         "category": "ai",
         "indexed_at": "2025-12-17T05:00:00Z",
-        "match_score": 8,
+        "relevance_score": 1.0,
+        "confidence": 0.85,
+        "match_score": 10,
         "score_details": {
-          "title_matches": 1,
-          "description_matches": 2,
-          "phrase_match": "title"
+          "tf_idf_factor": 12.45,
+          "stemmed_query": "artifici intellig",
+          "is_boolean": false
         }
       }
     ],
@@ -127,18 +133,43 @@ GET /api/v1/search?q=artificial+intelligence&category=ai&page=1&per_page=20
       "has_previous": false
     }
   },
-    "meta": {
+  "meta": {
     "version": "v1",
-    "timestamp": "2025-12-17T21:33:24+05:00",
+    "timestamp": "2025-12-19T08:05:00Z",
     "cache_age_seconds": 3600,
-    "index_date": "2025-12-17"
+    "index_date": "2025-12-18",
+    "performance": {
+      "time_ms": 16.5,
+      "memory_mb": 0.48
+    }
   }
 }
+```
+
+#### Scoring Details (`match_score`) 1-10 Scale
+The `match_score` is a weighted calculation (1-10) factoring in:
+- **BM25 Relevance**: Logarithmically scaled raw score.
+- **Exact Phrase Bonus**: +2 if the exact query appears in title or description.
+- **Title Match Bonus**: +3 for title presence.
+- **Description Match Bonus**: +1 for description presence.
+- **Normalization**: `relevance_score` is normalized to a 0.01-1.0 range based on the top result.
+
+#### Error Response (No Results)
+- **Code**: 404 Not Found
+```json
+{
+  "status": "error",
+  "error": {
+    "code": "NO_RESULTS",
+    "message": "No results found for query",
+    "query_suggestions": ["ai", "machine learning"]
+  }
+}
+```
 
 **Meta Field Notes:**
 - `index_date`: The generation date of the most recent index represented in the results (YYYY-MM-DD).
 - `cache_age_seconds`: Seconds since the local cache file was last modified.
-```
 
 **Response Codes:**
 
@@ -248,7 +279,31 @@ GET /api/v1/categories
 | 500 | Internal server error |
 | 503 | Service unavailable (cache not ready) |
 
-### 3. Health Check
+### 3. Random Topic Discovery (`GET /api/v1/topic`)
+
+Returns a random topic derived from current indexed records for discovery.
+
+#### Success Response
+- **Code**: 200 OK
+- **Schema**:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "topic": "Concise Topic Name",
+    "category": "ai",
+    "original_title": "Full Article Title Here",
+    "url": "https://example.com/article"
+  },
+  "meta": {
+    "version": "v1",
+    "timestamp": "2025-12-19T08:14:51+00:00"
+  }
+}
+```
+
+### 4. Health Check
 
 Check API and system health status.
 
@@ -313,7 +368,7 @@ GET /api/v1/health
 | 200 | Healthy or degraded |
 | 503 | Unhealthy (critical services down) |
 
-### 4. Statistics
+### 5. Statistics
 
 Get system statistics and metrics.
 
@@ -608,6 +663,12 @@ curl "http://localhost:8000/api/v1/health"
 curl "http://localhost:8000/api/v1/stats"
 ```
 
+**Discover Random Topic:**
+
+```bash
+curl "http://localhost:8000/api/v1/topic"
+```
+
 ### JavaScript Fetch Examples
 
 **Basic Search:**
@@ -659,7 +720,8 @@ async function search(query, category = 'all', page = 1) {
 **Actual Performance (Local Development):**
 
 Response times depend on hardware and cache status. Typical values:
-- Search endpoint: 20-80ms (cache hit)
+- Search endpoint: 15-50ms (cache hit/reuse)
+- Initial Index Build: 2-5 seconds (one-time per data refresh)
 - Categories endpoint: 5-15ms
 - Health endpoint: 2-5ms
 - Statistics endpoint: 10-30ms

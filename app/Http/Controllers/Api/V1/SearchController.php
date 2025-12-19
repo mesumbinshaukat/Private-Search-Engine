@@ -9,22 +9,58 @@ use Illuminate\Support\Facades\Log;
 
 class SearchController extends Controller
 {
+    protected $advancedSearch;
+
+    public function __construct(\App\Services\AdvancedSearchService $advancedSearch)
+    {
+        $this->advancedSearch = $advancedSearch;
+    }
+
     public function search(SearchRequest $request)
     {
         $query = $request->input('q');
         $category = $request->input('category', 'all');
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 20);
+        
+        // New optional params
+        $fromDate = $request->input('from_date');
+        $toDate = $request->input('to_date');
+        $sort = $request->input('sort', 'relevance');
+        $debug = $request->boolean('debug', false);
+        $forceFuzzy = $request->boolean('fuzzy', false);
+
+        $startTime = microtime(true);
+        $startMemory = memory_get_usage();
 
         try {
-            $results = $this->performSearch($query, $category);
+            $records = $this->getRecords($category);
+            
+            // Apply Date Filtering
+            if ($fromDate || $toDate) {
+                $records = $this->filterByDate($records, $fromDate, $toDate);
+            }
+
+            $options = [
+                'debug' => $debug,
+                'no_fuzzy' => !$forceFuzzy && $request->has('q')
+            ];
+
+            if ($forceFuzzy) {
+                $results = $this->advancedSearch->fuzzySearch($query, $records, $category);
+            } else {
+                $results = $this->advancedSearch->search($query, $records, $category, $options);
+            }
 
             if (empty($results)) {
+                $suggestions = $this->advancedSearch->suggest($query, $records);
+                
                 return response()->json([
                     'status' => 'error',
                     'error' => [
                         'code' => 'NO_RESULTS',
                         'message' => 'No results found for query',
+                        'query_suggestions' => $suggestions,
                     ],
                     'meta' => [
                         'version' => 'v1',
@@ -33,13 +69,24 @@ class SearchController extends Controller
                 ], 404);
             }
 
-            // Sort results by score descending
-            usort($results, fn($a, $b) => $b['match_score'] <=> $a['match_score']);
+            // Apply Sorting
+            $results = $this->sortResults($results, $sort);
 
             $paginated = $this->paginateResults($results, $page, $perPage);
             $indexDate = $this->getLatestIndexDate($results, $category);
 
-            return response()->json([
+            $duration = microtime(true) - $startTime;
+            $memoryUsed = memory_get_usage() - $startMemory;
+
+            if ($duration > 2.0) {
+                Log::warning("Slow search detected", [
+                    'query' => $query,
+                    'duration' => $duration,
+                    'memory' => $memoryUsed
+                ]);
+            }
+
+            $response = [
                 'status' => 'success',
                 'data' => [
                     'query' => $query,
@@ -52,8 +99,23 @@ class SearchController extends Controller
                     'timestamp' => now()->toIso8601String(),
                     'cache_age_seconds' => $this->getCacheAge(),
                     'index_date' => $indexDate,
+                    'performance' => [
+                        'time_ms' => round($duration * 1000, 2),
+                        'memory_mb' => round($memoryUsed / 1024 / 1024, 2)
+                    ]
                 ],
-            ]);
+            ];
+
+            if ($debug) {
+                $response['debug'] = [
+                    'total_scanned' => count($records),
+                    'total_matched' => count($results),
+                    'query_expansion' => $query . ' -> (stemmed terms)',
+                    'sort_method' => $sort,
+                ];
+            }
+
+            return response()->json($response);
 
         } catch (\Exception $e) {
             Log::error('Search error', [
@@ -76,119 +138,155 @@ class SearchController extends Controller
         }
     }
 
-    private function performSearch(string $query, string $category): array
+    public function getRandomTopic()
     {
-        $categories = $category === 'all' 
+        try {
+            $categories = config('categories.valid_categories');
+            if (empty($categories)) {
+                throw new \Exception("No valid categories configured.");
+            }
+
+            // Shuffle categories and try until we find one with records
+            shuffle($categories);
+            $randomCat = null;
+            $records = [];
+
+            foreach ($categories as $cat) {
+                $categoryRecords = $this->loadCategoryRecords($cat);
+                if (!empty($categoryRecords)) {
+                    $randomCat = $cat;
+                    $records = $categoryRecords;
+                    break;
+                }
+            }
+
+            if (empty($records)) {
+                return response()->json([
+                    'status' => 'error',
+                    'error' => [
+                        'code' => 'NO_DATA',
+                        'message' => 'No indexed data available in any category',
+                    ]
+                ], 404);
+            }
+
+            $record = $records[array_rand($records)];
+            $title = $record['title'] ?? 'Unknown Topic';
+            $topic = $this->deriveTopicFromTitle($title);
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'topic' => $topic,
+                    'category' => $randomCat,
+                    'original_title' => $title,
+                    'url' => $record['url'] ?? '',
+                ],
+                'meta' => [
+                    'version' => 'v1',
+                    'timestamp' => now()->toIso8601String(),
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Topic generation error: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'error' => [
+                    'code' => 'INTERNAL_ERROR',
+                    'message' => 'Failed to generate random topic',
+                ]
+            ], 500);
+        }
+    }
+
+    private function deriveTopicFromTitle(string $title): string
+    {
+        // Clean up common noise patterns
+        $topic = preg_replace('/ - .+$| \| .+$|: .+$| \.\.\.$/', '', $title);
+        $topic = trim($topic);
+        
+        // Ensure it's not too long for a "topic"
+        $words = explode(' ', $topic);
+        if (count($words) > 6) {
+            $topic = implode(' ', array_slice($words, 0, 6));
+        }
+
+        return $topic;
+    }
+
+    private function getRecords(string $category): array
+    {
+        $categories = ($category === 'all') 
             ? config('categories.valid_categories') 
             : [$category];
 
-        $allResults = [];
-
+        $allRecords = [];
         foreach ($categories as $cat) {
-            $cacheFile = "cache/{$cat}.json";
-
-            if (!Storage::exists($cacheFile)) {
-                continue;
-            }
-
-            $json = Storage::get($cacheFile);
-            $data = json_decode($json, true);
-
-            if (!$data || !isset($data['records'])) {
-                continue;
-            }
-
-            foreach ($data['records'] as $record) {
-                $scoreData = $this->calculateScore($record, $query);
-                if ($scoreData['score'] > 0) {
-                    $record['category'] = $cat;
-                    $record['match_score'] = $scoreData['score'];
-                    $record['score_details'] = $scoreData['details'];
-                    $allResults[] = $record;
-                }
-            }
+            $allRecords = array_merge($allRecords, $this->loadCategoryRecords($cat));
         }
 
-        return $allResults;
+        return $allRecords;
     }
 
-    private function calculateScore(array $record, string $query): array
+    private function loadCategoryRecords(string $cat): array
     {
-        $query = strtolower(trim($query));
-        $title = strtolower($record['title'] ?? '');
-        $description = strtolower($record['description'] ?? '');
-        $terms = explode(' ', $query);
-        $terms = array_filter($terms, fn($t) => strlen($t) > 1);
+        $cacheFile = "cache/{$cat}.json";
+        if (!Storage::exists($cacheFile)) return [];
 
-        if (empty($terms)) {
-            return ['score' => 0, 'details' => []];
-        }
+        $data = json_decode(Storage::get($cacheFile), true);
+        if (!$data || !isset($data['records'])) return [];
 
-        $score = 0;
-        $details = [
-            'title_matches' => 0,
-            'description_matches' => 0,
-            'phrase_match' => false,
-        ];
-
-        // 1. Exact phrase match (Highest Priority)
-        if (str_contains($title, $query)) {
-            $score += 50;
-            $details['phrase_match'] = 'title';
-        } elseif (str_contains($description, $query)) {
-            $score += 25;
-            $details['phrase_match'] = 'description';
-        }
-
-        // 2. Individual term matches
-        foreach ($terms as $term) {
-            // Title matches are weighted more (10 points each)
-            $titleCount = substr_count($title, $term);
-            if ($titleCount > 0) {
-                $score += min(30, $titleCount * 10);
-                $details['title_matches'] += $titleCount;
-            }
-
-            // Description matches are weighted less (3 points each)
-            $descCount = substr_count($description, $term);
-            if ($descCount > 0) {
-                $score += min(15, $descCount * 3);
-                $details['description_matches'] += $descCount;
-            }
-        }
-
-        // 3. Normalization to 1-10 scale
-        // A "perfect" result for a simple query might naturally hit 50-80 points.
-        // We'll cap the raw score and map it.
-        $normalized = min(10, max(1, ceil($score / 8)));
-
-        // Edge case: if it exists at all but score is somehow 0
-        if ($score > 0 && $normalized < 1) {
-            $normalized = 1;
-        }
-
-        return [
-            'score' => (int) $normalized,
-            'details' => $details
-        ];
+        return array_map(function($record) use ($cat) {
+            $record['category'] = $cat;
+            return $record;
+        }, $data['records']);
     }
 
-    private function matchesQuery(array $record, string $query): bool
+    private function filterByDate(array $records, ?string $from, ?string $to): array
     {
-        $query = strtolower($query);
-        $title = strtolower($record['title'] ?? '');
-        $description = strtolower($record['description'] ?? '');
+        return array_filter($records, function($record) use ($from, $to) {
+            if (!isset($record['published_at'])) return true;
+            
+            $pubDate = strtotime($record['published_at']);
+            if ($from && strtotime($from) > $pubDate) return false;
+            if ($to && strtotime($to) < $pubDate) return false;
+            
+            return true;
+        });
+    }
 
-        return str_contains($title, $query) || str_contains($description, $query);
+    private function sortResults(array $results, string $sort): array
+    {
+        switch ($sort) {
+            case 'date_desc':
+                usort($results, fn($a, $b) => ($b['published_at'] ?? '') <=> ($a['published_at'] ?? ''));
+                break;
+            case 'date_asc':
+                usort($results, fn($a, $b) => ($a['published_at'] ?? '') <=> ($b['published_at'] ?? ''));
+                break;
+            case 'relevance':
+            default:
+                // Prioritize relevance_score then match_score
+                usort($results, function($a, $b) {
+                    if (($b['relevance_score'] ?? 0) == ($a['relevance_score'] ?? 0)) {
+                        return ($b['match_score'] ?? 0) <=> ($a['match_score'] ?? 0);
+                    }
+                    return ($b['relevance_score'] ?? 0) <=> ($a['relevance_score'] ?? 0);
+                });
+                break;
+        }
+
+        return $results;
     }
 
     private function paginateResults(array $results, int $page, int $perPage): array
     {
         $total = count($results);
         $totalPages = (int) ceil($total / $perPage);
-        $offset = ($page - 1) * $perPage;
-
-        $items = array_slice($results, $offset, $perPage);
+        
+        // Use array_chunk for efficient access to page
+        $chunks = array_chunk($results, $perPage);
+        $items = $chunks[$page - 1] ?? [];
 
         return [
             'items' => $items,
@@ -217,13 +315,10 @@ class SearchController extends Controller
 
     private function getLatestIndexDate(array $results, string $category): string
     {
-        $query = \App\Models\IndexMetadata::query();
-
-        if ($category !== 'all') {
-            $query->where('category', $category);
-        }
-
-        $latestDate = $query->latest('date')->value('date');
+        $latestDate = \App\Models\IndexMetadata::query()
+            ->when($category !== 'all', fn($q) => $q->where('category', $category))
+            ->latest('date')
+            ->value('date');
 
         return $latestDate ? $latestDate->format('Y-m-d') : now()->format('Y-m-d');
     }

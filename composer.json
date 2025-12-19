@@ -9,7 +9,9 @@
         "php": "^8.2",
         "google/apiclient": "~2.0",
         "laravel/framework": "^12.0",
-        "laravel/tinker": "^2.10.1"
+        "laravel/tinker": "^2.10.1",
+        "teamtnt/tntsearch": "^5.0",
+        "wamania/php-stemmer": "^4.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

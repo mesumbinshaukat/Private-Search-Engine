@@ -18,6 +18,10 @@ class SearchRequest extends FormRequest
             'category' => 'nullable|in:technology,business,ai,sports,politics,all',
             'page' => 'nullable|integer|min:1',
             'per_page' => 'nullable|integer|min:1|max:100',
+            'from_date' => 'nullable|date_format:Y-m-d',
+            'to_date' => 'nullable|date_format:Y-m-d',
+            'sort' => 'nullable|string|in:relevance,date_desc,date_asc',
+            'debug' => 'nullable|boolean',
         ];
     }
 

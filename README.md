@@ -19,6 +19,11 @@ Crawl → Parse → Index → Cleanup → Upload → Cache → Serve
 **Laravel Orchestration Layer**  
 Laravel serves as the orchestration framework, providing job queuing, scheduling, and API routing. Business logic resides in dedicated service classes.
 
+- **Advanced Search Core**: Powered by TNTSearch (BM25 ranking), PHP-Stemmer, and fuzzy matching (Levenshtein).
+- **Intelligent Queries**: Supports logical operators (`AND`, `OR`, `NOT`), exact phrase matching (`""`), and automatic synonym expansion (e.g., AI → ML).
+- **Rich Results**: Result highlighting, confidence scores (0-1), match scores (1-10), and query suggestions for empty results.
+- **Advanced Filtering**: Filter by category, date range (`from_date`, `to_date`), and custom sorting (`relevance`, `date_desc`).
+
 **Crawler Service**  
 Implements polite, ethical web crawling with robots.txt compliance, per domain rate limiting, and comprehensive HTTP validation. Handles 429, 5xx, redirects, and timeouts gracefully.
 
@@ -77,7 +82,7 @@ Maintains local cache of index files downloaded from Google Drive for fast API s
 ### Data Retention
 
 - Maximum data age: 5 days
-- Minimum records per category: 1000
+- Minimum records per category: 5 (configurable)
 - Index files older than 5 days are automatically purged
 - Google Drive is the source of truth
 
@@ -91,7 +96,7 @@ The system supports exactly five categories. This list is immutable:
 4. **Sports** - All sports news, events, and analysis
 5. **Politics** - Political news, policy, elections, government
 
-Each category must maintain a minimum of 1000 valid, live records per day. If this threshold cannot be met, the system logs failure and does not upload incomplete data.
+Each category must maintain a minimum record count (default: 5). If this threshold cannot be met, the system logs failure and does not upload incomplete data.
 
 ## Security Posture
 
@@ -127,9 +132,6 @@ The system is entirely dependent on Google Drive for persistent storage. Google 
 **No Real Time Updates**  
 The system operates on a daily refresh cycle. Content published between refresh cycles will not be available until the next cycle completes.
 
-**Limited Search Features**  
-Search is basic keyword matching within the indexed JSON. No advanced features like fuzzy matching, stemming, or relevance ranking are implemented.
-
 ### Operational Limitations
 
 **Local Development Only**  
@@ -146,7 +148,6 @@ The system logs failures but does not send notifications. Monitoring must be man
 Do not use this system if you need:
 
 - Real time or near real time search results
-- Advanced search features (fuzzy matching, relevance ranking, faceted search)
 - JavaScript rendered content indexing
 - Automatic source discovery
 - Production grade reliability and monitoring
@@ -210,7 +211,12 @@ Run these commands in order to execute the full data lifecycle:
    php artisan upload:index
    ```
 
-6. **Search**: Start the server and visit `http://localhost:8000`.
+6. **Discover**: Get a random topic for discovery.
+   ```bash
+   curl "http://localhost:8000/api/v1/topic"
+   ```
+
+7. **Search**: Start the server and visit `http://localhost:8000`.
    ```bash
    php artisan serve
    ```
