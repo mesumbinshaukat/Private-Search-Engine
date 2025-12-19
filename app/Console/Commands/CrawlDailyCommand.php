@@ -20,9 +20,20 @@ class CrawlDailyCommand extends Command
 
         $this->info('Starting daily crawl for categories: ' . implode(', ', $categories));
 
+        // Truncate crawl jobs to start fresh logs for this cycle (SQLite safe)
+        if (config('database.default') === 'sqlite') {
+            \Illuminate\Support\Facades\DB::table('crawl_jobs')->delete();
+        } else {
+            \App\Models\CrawlJob::truncate();
+        }
+
         $totalJobs = 0;
 
         foreach ($categories as $cat) {
+            // Reset the daily crawl count cache for each category to allow fresh discovery
+            $today = now()->format('Y-m-d');
+            \Illuminate\Support\Facades\Cache::forget("crawl_count:{$cat}:{$today}");
+            
             $seedUrls = config("categories.categories.{$cat}.seed_urls", []);
             
             foreach ($seedUrls as $url) {

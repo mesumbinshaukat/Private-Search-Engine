@@ -50,37 +50,30 @@ class ParsePageJob implements ShouldQueue
             return;
         }
 
-        if (ParsedRecord::where('canonical_url', $parsed['canonical_url'])->exists()) {
-            Log::info('Duplicate URL detected (canonical)', [
-                'url' => $this->crawlJob->url,
-                'canonical_url' => $parsed['canonical_url'],
-            ]);
-            return;
-        }
-
-        if (ParsedRecord::where('content_hash', $parsed['content_hash'])->exists()) {
-            Log::info('Duplicate content detected (hash)', [
-                'url' => $this->crawlJob->url,
+        $existing = ParsedRecord::where('canonical_url', $parsed['canonical_url'])->first();
+        
+        if ($existing) {
+            $existing->update([
+                'title' => $parsed['title'],
+                'description' => $parsed['description'],
+                'published_at' => $parsed['published_at'],
                 'content_hash' => $parsed['content_hash'],
+                'parsed_at' => now(),
             ]);
-            return;
+            Log::info('Updated existing record', ['url' => $this->crawlJob->url]);
+        } else {
+            ParsedRecord::create([
+                'url' => $parsed['url'],
+                'canonical_url' => $parsed['canonical_url'],
+                'title' => $parsed['title'],
+                'description' => $parsed['description'],
+                'published_at' => $parsed['published_at'],
+                'category' => $this->crawlJob->category,
+                'content_hash' => $parsed['content_hash'],
+                'parsed_at' => now(),
+            ]);
+            Log::info('Parse completed - new record', ['url' => $this->crawlJob->url]);
         }
-
-        ParsedRecord::create([
-            'url' => $parsed['url'],
-            'canonical_url' => $parsed['canonical_url'],
-            'title' => $parsed['title'],
-            'description' => $parsed['description'],
-            'published_at' => $parsed['published_at'],
-            'category' => $this->crawlJob->category,
-            'content_hash' => $parsed['content_hash'],
-            'parsed_at' => now(),
-        ]);
-
-        Log::info('Parse completed', [
-            'url' => $this->crawlJob->url,
-            'title' => $parsed['title'],
-        ]);
 
         $this->discoverLinks($parser, $html);
 
@@ -119,13 +112,8 @@ class ParsePageJob implements ShouldQueue
                 continue;
             }
 
-            // Check if already crawled or queued
+            // Check if already crawled or queued in THIS cycle
             if (CrawlJob::where('url', $link)->exists()) {
-                continue;
-            }
-
-            // Check if already parsed (canonical URL check across ALL categories)
-            if (ParsedRecord::where('canonical_url', $link)->exists()) {
                 continue;
             }
 
