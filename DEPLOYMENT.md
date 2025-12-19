@@ -25,10 +25,17 @@ This document provides comprehensive instructions for setting up, configuring, a
 
 If starting fresh, the Laravel project is already initialized in the current directory.
 
-### 2. Install Dependencies
+### 2 Install Dependencies
 
+#### 2.1 Install Dependencies - LOCAL
 ```bash
 composer install
+```
+
+#### 2.3 Install Dependencies - PRODUCTION
+
+```bash
+composer install --no-dev --optimize-autoloader --classmap-authoritative --ignore-platform-reqs
 ```
 
 ### 3. Environment Configuration
