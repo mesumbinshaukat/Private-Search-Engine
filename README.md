@@ -191,6 +191,7 @@ Run these commands to set up the environment and database:
 cp .env.example .env
 php artisan key:generate
 touch database/database.sqlite
+php artisan vendor:publish --provider="Laravel\Sanctum\SanctumServiceProvider"
 php artisan migrate --seed --class=CreateUserSeeder
 ```
 
