@@ -37,6 +37,7 @@ return [
 
     'google_drive' => [
         'is_mock' => env('GOOGLE_DRIVE_MOCK', true),
+        'service_account_json' => env('GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON'),
         'client_secret_json' => env('GOOGLE_DRIVE_CLIENT_SECRET_JSON'),
         'token_json' => env('GOOGLE_DRIVE_TOKEN_JSON'),
         'folder_id' => env('GOOGLE_DRIVE_FOLDER_ID'),

@@ -401,9 +401,19 @@
         }
 
         function renderResults(results) {
-            resultsContainer.innerHTML = results.map(item => `
+            resultsContainer.innerHTML = results.map(item => {
+                let scoreColor = '#10b981'; // Green (8-10)
+                if (item.match_score < 4) scoreColor = '#ef4444'; // Red (1-3)
+                else if (item.match_score < 8) scoreColor = '#f59e0b'; // Yellow (4-7)
+
+                return `
                 <div class="result-card">
-                    <span class="url">${item.url}</span>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <span class="url">${item.url}</span>
+                        <span class="badge" style="background: ${scoreColor}20; color: ${scoreColor}; border: 1px solid ${scoreColor}40;">
+                            Match: ${item.match_score}/10
+                        </span>
+                    </div>
                     <h3><a href="${item.url}" target="_blank">${item.title}</a></h3>
                     <p class="description">${item.description || 'No description available.'}</p>
                     <div class="meta-info">
@@ -411,7 +421,8 @@
                         <span>Indexed ${new Date(item.indexed_at).toLocaleDateString()}</span>
                     </div>
                 </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         searchButton.addEventListener('click', performSearch);

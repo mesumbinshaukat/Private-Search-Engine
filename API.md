@@ -109,7 +109,13 @@ GET /api/v1/search?q=artificial+intelligence&category=ai&page=1&per_page=20
         "description": "Meta description or excerpt",
         "published_at": "2025-12-15T10:30:00Z",
         "category": "ai",
-        "indexed_at": "2025-12-17T05:00:00Z"
+        "indexed_at": "2025-12-17T05:00:00Z",
+        "match_score": 8,
+        "score_details": {
+          "title_matches": 1,
+          "description_matches": 2,
+          "phrase_match": "title"
+        }
       }
     ],
     "pagination": {

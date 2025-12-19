@@ -22,54 +22,77 @@ class GoogleDriveService
     private function initializeClient(): void
     {
         try {
+            $serviceAccountPath = config('services.google_drive.service_account_json');
             $clientSecretPath = config('services.google_drive.client_secret_json');
-            $tokenPath = config('services.google_drive.token_json');
 
-            if (!$clientSecretPath) {
-                throw new \Exception('GOOGLE_DRIVE_CLIENT_SECRET_JSON not configured');
+            if ($serviceAccountPath) {
+                $this->initializeServiceAccount($serviceAccountPath);
+            } elseif ($clientSecretPath) {
+                $this->initializeOAuth($clientSecretPath);
+            } else {
+                throw new \Exception('Neither GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON nor GOOGLE_DRIVE_CLIENT_SECRET_JSON configured');
             }
-
-            $secretFullPath = storage_path('app/' . ltrim($clientSecretPath, 'storage/app/'));
-            $tokenFullPath = storage_path('app/' . ltrim($tokenPath, 'storage/app/'));
-
-            if (!file_exists($secretFullPath)) {
-                throw new \Exception("Client secret JSON file not found: {$secretFullPath}");
-            }
-
-            $client = new Client();
-            $client->setAuthConfig($secretFullPath);
-            $client->addScope(Drive::DRIVE_FILE);
-            $client->addScope(Drive::DRIVE);
-            $client->setAccessType('offline');
-            $client->setPrompt('select_account consent');
-
-            if (file_exists($tokenFullPath)) {
-                $accessToken = json_decode(file_get_contents($tokenFullPath), true);
-                $client->setAccessToken($accessToken);
-            }
-
-            if ($client->isAccessTokenExpired()) {
-                if ($client->getRefreshToken()) {
-                    $client->fetchAccessTokenWithRefreshToken($client->getRefreshToken());
-                    file_put_contents($tokenFullPath, json_encode($client->getAccessToken()));
-                } else {
-                    Log::warning('Google Drive access token expired and no refresh token available');
-                    $this->driveService = null;
-                    return;
-                }
-            }
-
-            $this->driveService = new Drive($client);
-
-            Log::info('Google Drive client initialized with OAuth 2.0');
 
         } catch (\Exception $e) {
             Log::error('Failed to initialize Google Drive client', [
                 'error' => $e->getMessage(),
             ]);
-
             $this->driveService = null;
         }
+    }
+
+    private function initializeServiceAccount(string $path): void
+    {
+        $jsonFullPath = storage_path('app/' . ltrim($path, 'storage/app/'));
+
+        if (!file_exists($jsonFullPath)) {
+            throw new \Exception("Service account JSON file not found: {$jsonFullPath}");
+        }
+
+        $client = new Client();
+        $client->setAuthConfig($jsonFullPath);
+        $client->addScope(Drive::DRIVE_FILE);
+        $client->addScope(Drive::DRIVE);
+        
+        $this->driveService = new Drive($client);
+        Log::info('Google Drive client initialized with Service Account');
+    }
+
+    private function initializeOAuth(string $path): void
+    {
+        $tokenPath = config('services.google_drive.token_json');
+        $secretFullPath = storage_path('app/' . ltrim($path, 'storage/app/'));
+        $tokenFullPath = storage_path('app/' . ltrim($tokenPath, 'storage/app/'));
+
+        if (!file_exists($secretFullPath)) {
+            throw new \Exception("Client secret JSON file not found: {$secretFullPath}");
+        }
+
+        $client = new Client();
+        $client->setAuthConfig($secretFullPath);
+        $client->addScope(Drive::DRIVE_FILE);
+        $client->addScope(Drive::DRIVE);
+        $client->setAccessType('offline');
+        $client->setPrompt('select_account consent');
+
+        if (file_exists($tokenFullPath)) {
+            $accessToken = json_decode(file_get_contents($tokenFullPath), true);
+            $client->setAccessToken($accessToken);
+        }
+
+        if ($client->isAccessTokenExpired()) {
+            if ($client->getRefreshToken()) {
+                $client->fetchAccessTokenWithRefreshToken($client->getRefreshToken());
+                file_put_contents($tokenFullPath, json_encode($client->getAccessToken()));
+            } else {
+                Log::warning('Google Drive access token expired and no refresh token available');
+                $this->driveService = null;
+                return;
+            }
+        }
+
+        $this->driveService = new Drive($client);
+        Log::info('Google Drive client initialized with OAuth 2.0');
     }
 
     public function upload(string $localPath, string $remoteName): array

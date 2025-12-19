@@ -136,42 +136,43 @@ The mock service will:
 - Generate mock file IDs
 - Validate checksums locally
 
-### 1. Google Drive API Setup (OAuth 2.0 Desktop)
+### 1. Google Drive API Setup
 
-1.  Go to the [Google Cloud Console](https://console.cloud.google.com/).
-2.  Enable the **Google Drive API**.
-3.  Create **OAuth 2.0 Desktop Credentials**:
-    -   Go to "APIs & Services" > "Credentials".
-    -   Click "Create Credentials" > "OAuth client ID".
-    -   Select "Desktop app".
-    -   Download the JSON file and rename it to `client_secret.json`.
-4.  Place `client_secret.json` in `storage/app/credentials/`.
-5.  Run the authorization command:
-    ```bash
-    php artisan google-drive:authorize
-    ```
-6.  Follow the link, authorize, and paste the code into the terminal.
-7.  The system will save `token.json` automatically.
+You can choose between **Service Account** (Automated) or **OAuth 2.0** (Personal).
+
+#### Option A: Service Account
+1. [Cloud Console](https://console.cloud.google.com/) > Enable Drive API.
+2. Create Service Account > Download JSON key.
+3. Place in `storage/app/credentials/service-account.json`.
+4. Share Drive folder with Service Account email (Editor).
+
+#### Option B: OAuth 2.0
+1. [Cloud Console](https://console.cloud.google.com/) > Enable Drive API.
+2. Create OAuth 2.0 Desktop Credentials > Download JSON.
+3. Place in `storage/app/credentials/client_secret.json`.
+4. Run `php artisan google-drive:authorize`.
 
 ### 2. Environment Configuration
 
-Update your `.env` file:
-
 ```env
-GOOGLE_DRIVE_MOCK=false
+# For Service Account
+GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON=storage/app/credentials/service-account.json
+
+# OR For OAuth 2.0
 GOOGLE_DRIVE_CLIENT_SECRET_JSON=storage/app/credentials/client_secret.json
 GOOGLE_DRIVE_TOKEN_JSON=storage/app/credentials/token.json
-GOOGLE_DRIVE_FOLDER_ID=your_folder_id_here
+
+GOOGLE_DRIVE_MOCK=false
+GOOGLE_DRIVE_FOLDER_ID=your_id
 ```
 
 ### 3. Permissions
 
-Unlike Service Accounts, OAuth 2.0 uses **your personal storage quota**. Ensure the folder you use is owned by or shared with your account with "Editor" permissions.
+Service Accounts work seamlessly in production without manual browser intervention. Ensure the folder ID in `.env` is shared with the Service Account email.
 
 **Security Notes:**
-- Never commit the `client_secret.json` or `token.json` files to version control
-- Add `storage/app/credentials/` to `.gitignore`
-- Rotate client secrets if compromised
+- Never commit the `service-account.json` file to version control.
+- Add `storage/app/credentials/` to `.gitignore`.
 
 ## Queue and Scheduler Configuration
 

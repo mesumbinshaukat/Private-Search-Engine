@@ -24,6 +24,9 @@ Google Drive integration must use Service Account authentication exclusively. OA
 ### AR6: Stateless Search
 Search operations must not maintain state between requests. Each API call is independent and deterministic.
 
+### AR7: Weighted Search Relevance
+Search results must be scored based on relevance (Title weight > Description weight) and sorted by score. A match score (1-10) must be exposed via API and UI.
+
 ## Data Integrity Rules
 
 ### DI1: Five Categories Only

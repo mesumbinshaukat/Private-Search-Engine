@@ -155,14 +155,21 @@ Do not use this system if you need:
 - Data retention beyond 5 days
 - Guaranteed minimum record counts (system may fail to meet 1000 record threshold)
 
-## Authentication (OAuth 2.0)
+## Authentication
 
-This system uses **OAuth 2.0 Desktop Credentials** to integrate with your personal Google Drive storage. This provides a 15GB+ storage quota, bypassing the limitations of Service Accounts.
+This system supports two authentication methods for Google Drive:
 
-1. Create a "Desktop" OAuth Client in Google Cloud Console.
+### Method A: Service Account (Recommended for Production)
+1. Create a Service Account in Google Cloud Console.
+2. Download the JSON key and save it to `storage/app/credentials/service-account.json`.
+3. Share your target Google Drive folder with the Service Account email (Editor access).
+4. Configure `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON` in `.env`.
+
+### Method B: OAuth 2.0 (Personal Account)
+1. Create "Desktop" OAuth Client in Google Cloud Console.
 2. Save credentials to `storage/app/credentials/client_secret.json`.
 3. Run `php artisan google-drive:authorize` to log in via browser.
-4. Tokens are saved securely to `token.json` for persistent access.
+4. Configure `GOOGLE_DRIVE_CLIENT_SECRET_JSON` and `GOOGLE_DRIVE_TOKEN_JSON` in `.env`.
 
 ## Quick Start Commands
 
