@@ -201,6 +201,13 @@ Run the entire lifecycle sequentially:
 php artisan master:refresh
 ```
 
+OR
+
+Start the Fresh Unbreakable Refresh:
+```bash
+php artisan master:refresh --fresh
+```
+
 ### 3. Individual Lifecycle Commands
 If you prefer to run phases manually:
 
