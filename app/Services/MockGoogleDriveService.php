@@ -108,4 +108,33 @@ class MockGoogleDriveService
             return false;
         }
     }
+
+    public function listFiles(string $query): array
+    {
+        // Simple mock implementation: list all files in mock path and filter by query if it mentions name
+        $files = glob($this->mockPath . '/*');
+        $result = [];
+
+        foreach ($files as $file) {
+            $name = basename($file);
+            // If query contains name = '...', try to extract name
+            if (preg_match("/name = '([^']+)'/", $query, $matches)) {
+                if (str_contains($name, $matches[1])) {
+                    $result[] = (object)[
+                        'id' => strtok($name, '_'),
+                        'name' => substr($name, strpos($name, '_') + 1),
+                        'md5Checksum' => md5_file($file)
+                    ];
+                }
+            } else {
+                $result[] = (object)[
+                    'id' => strtok($name, '_'),
+                    'name' => substr($name, strpos($name, '_') + 1),
+                    'md5Checksum' => md5_file($file)
+                ];
+            }
+        }
+
+        return $result;
+    }
 }

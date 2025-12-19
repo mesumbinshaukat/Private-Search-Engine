@@ -50,7 +50,7 @@ class ParsePageJob implements ShouldQueue
             return;
         }
 
-        if (ParsedRecord::isDuplicate($parsed['canonical_url'])) {
+        if (ParsedRecord::where('canonical_url', $parsed['canonical_url'])->exists()) {
             Log::info('Duplicate URL detected (canonical)', [
                 'url' => $this->crawlJob->url,
                 'canonical_url' => $parsed['canonical_url'],
@@ -58,7 +58,7 @@ class ParsePageJob implements ShouldQueue
             return;
         }
 
-        if (ParsedRecord::isDuplicateByHash($parsed['content_hash'])) {
+        if (ParsedRecord::where('content_hash', $parsed['content_hash'])->exists()) {
             Log::info('Duplicate content detected (hash)', [
                 'url' => $this->crawlJob->url,
                 'content_hash' => $parsed['content_hash'],
@@ -124,7 +124,7 @@ class ParsePageJob implements ShouldQueue
                 continue;
             }
 
-            // Check if already parsed (canonical URL check)
+            // Check if already parsed (canonical URL check across ALL categories)
             if (ParsedRecord::where('canonical_url', $link)->exists()) {
                 continue;
             }

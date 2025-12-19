@@ -111,4 +111,9 @@ class StorageService
             return false;
         }
     }
+
+    public function listFiles(string $query): array
+    {
+        return $this->googleDrive->listFiles($query);
+    }
 }

@@ -335,6 +335,27 @@
         <span id="last-update">Last Sync: --</span>
     </div>
 
+    <div id="login-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: var(--glass-bg); border: 1px solid var(--glass-border); padding: 2.5rem; border-radius: 20px; width: 100%; max-width: 400px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+            <h2 style="margin-bottom: 0.5rem; font-size: 1.5rem; font-weight: 700;">Secure Access</h2>
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2rem;">Please authenticate to explore the search engine.</p>
+            <form id="login-form">
+                <div style="margin-bottom: 1.5rem;">
+                    <label style="display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.5rem;">Email Address</label>
+                    <input type="email" id="login-email" required style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border); border-radius: 10px; padding: 0.75rem; color: white; outline: none;">
+                </div>
+                <div style="margin-bottom: 2rem;">
+                    <label style="display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.5rem;">Password</label>
+                    <input type="password" id="login-password" required style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border); border-radius: 10px; padding: 0.75rem; color: white; outline: none;">
+                </div>
+                <button type="submit" style="width: 100%; background: var(--primary); color: white; border: none; padding: 1rem; border-radius: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">
+                    Authorize Access
+                </button>
+                <p id="login-error" style="color: #ef4444; font-size: 0.8rem; margin-top: 1rem; text-align: center; display: none;"></p>
+            </form>
+        </div>
+    </div>
+
     <script>
         const searchInput = document.getElementById('search-input');
         const searchButton = document.getElementById('search-button');
@@ -342,13 +363,59 @@
         const appContainer = document.getElementById('app-container');
         const spinner = document.getElementById('spinner');
         const categoryTabs = document.querySelectorAll('.tab');
+        const loginModal = document.getElementById('login-modal');
+        const loginForm = document.getElementById('login-form');
+        const loginError = document.getElementById('login-error');
         
         let currentCategory = 'all';
 
+        // Auth Check
+        function checkAuth() {
+            const token = localStorage.getItem('auth_token');
+            if (!token) {
+                loginModal.style.display = 'flex';
+                return false;
+            }
+            return true;
+        }
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            loginError.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/v1/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: document.getElementById('login-email').value,
+                        password: document.getElementById('login-password').value
+                    })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    localStorage.setItem('auth_token', data.access_token);
+                    loginModal.style.display = 'none';
+                    fetchStats();
+                } else {
+                    loginError.textContent = data.message || 'Authentication failed';
+                    loginError.style.display = 'block';
+                }
+            } catch (err) {
+                loginError.textContent = 'Connection error. Try again.';
+                loginError.style.display = 'block';
+            }
+        });
+
         // Update stats
         async function fetchStats() {
+            if (!localStorage.getItem('auth_token')) return;
+
             try {
-                const response = await fetch('/api/v1/stats');
+                const response = await fetch('/api/v1/stats', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+                });
                 const result = await response.json();
                 if (result.status === 'success') {
                     document.getElementById('total-records').textContent = `Records: ${result.data.index.total_records}`;
@@ -358,7 +425,9 @@
             } catch (e) {}
         }
 
-        fetchStats();
+        if (checkAuth()) {
+            fetchStats();
+        }
 
         categoryTabs.forEach(tab => {
             tab.addEventListener('click', () => {
@@ -403,6 +472,8 @@
         }
 
         async function performSearch() {
+            if (!checkAuth()) return;
+
             const query = searchInput.value.trim();
             if (!query) return;
 
@@ -411,10 +482,18 @@
             spinner.style.display = 'block';
 
             try {
-                const response = await fetch(`/api/v1/search?q=${encodeURIComponent(query)}&category=${currentCategory}`);
+                const response = await fetch(`/api/v1/search?q=${encodeURIComponent(query)}&category=${currentCategory}`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+                });
                 const data = await response.json();
 
                 spinner.style.display = 'none';
+
+                if (response.status === 401) {
+                    localStorage.removeItem('auth_token');
+                    loginModal.style.display = 'flex';
+                    return;
+                }
 
                 if (data.status === 'success' && data.data.results.length > 0) {
                     renderResults(data.data.results);

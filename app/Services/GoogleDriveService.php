@@ -256,4 +256,27 @@ class GoogleDriveService
     {
         return $this->driveService !== null;
     }
+
+    public function listFiles(string $query): array
+    {
+        if (!$this->driveService) {
+            Log::error('Google Drive client not initialized for listing files');
+            return [];
+        }
+
+        try {
+            $response = $this->driveService->files->listFiles([
+                'q' => "'{$this->folderId}' in parents and {$query}",
+                'fields' => 'files(id, name, md5Checksum)',
+            ]);
+
+            return $response->getFiles();
+        } catch (\Exception $e) {
+            Log::error('Google Drive list files failed', [
+                'query' => $query,
+                'error' => $e->getMessage(),
+            ]);
+            return [];
+        }
+    }
 }

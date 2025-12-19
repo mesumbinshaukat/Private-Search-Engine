@@ -81,6 +81,10 @@ INDEXER_MAX_DATA_AGE_DAYS=5
 
 API_RATE_LIMIT_PER_MINUTE=60
 
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=password
+API_MASTER_KEY=your_generate_master_key
+
 CACHE_DRIVER=file
 SESSION_DRIVER=file
 ```
@@ -230,6 +234,8 @@ The system uses Laravel scheduler for daily refresh cycle.
 * * * * * cd /path/to/project && php artisan schedule:run >> /dev/null 2>&1
 ```
 
+*Note: The scheduler is configured to run `MasterRefreshJob` daily.*
+
 **Verify Scheduler (Development):**
 
 ```bash
@@ -262,10 +268,16 @@ In a separate terminal, start the queue worker:
 php artisan queue:work
 ```
 
-### Scheduler Simulation
+### Refresh Cycle Simulation
 
 For testing the daily refresh cycle without waiting for cron:
 
+**Recommended: Master Command**
+```bash
+php artisan master:refresh
+```
+
+**Individual Phases:**
 ```bash
 php artisan crawl:daily
 ```

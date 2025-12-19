@@ -59,27 +59,70 @@ https://your-domain.com/api/v1
 
 ## Authentication
 
-### Current Implementation (Local Development)
+The API requires authentication for all endpoints except `/health`.
 
-No authentication required. All endpoints are publicly accessible.
+### 1. User Authentication (Laravel Sanctum)
+For UI-based access or browser-based clients:
+1. Authenticate via `POST /api/v1/login`.
+2. Include the returned `access_token` in the `Authorization` header.
 
-### Future Implementation (Production)
-
-API key authentication via header:
-
+```http
+Authorization: Bearer {access_token}
 ```
-Authorization: Bearer {api_key}
+
+### 2. Service-to-Service (Master Key)
+For trusted backend services or automated scripts:
+Include the `API_MASTER_KEY` in the `X-API-MASTER-KEY` header or the `api_master_key` query parameter.
+
+```http
+X-API-MASTER-KEY: your_master_key
+```
+OR
+```http
+GET /api/v1/search?q=query&api_master_key=your_master_key
 ```
 
 ## Endpoints
 
-### 1. Search
+### 1. Login
+
+Authenticate a user and receive a Sanctum API token.
+
+**Endpoint:** `POST /api/v1/login`
+
+**Request Body:**
+```json
+{
+  "email": "admin@example.com",
+  "password": "password"
+}
+```
+
+**Success Response:**
+- **Code**: 200 OK
+- **Schema**:
+```json
+{
+  "status": "success",
+  "data": {
+    "access_token": "1|...",
+    "token_type": "Bearer",
+    "user": {
+        "id": 1,
+        "name": "Admin User",
+        "email": "admin@example.com"
+    }
+  }
+}
+```
+
+### 2. Search [Auth Required]
 
 Search across all categories or filter by specific category.
 
-**Endpoint:**### Search Results (`GET /api/v1/search`)
+**Endpoint:** `GET /api/v1/search`
 
-Performs a relevance-ranked search across indexed categories.
+Performs a relevance-ranked search across indexed categories. Requires a valid Sanctum token or Master Key.
 
 #### Query Parameters
 | Parameter   | Type    | Required | Description |
@@ -91,7 +134,7 @@ Performs a relevance-ranked search across indexed categories.
 | `sort`      | string  | No       | `relevance` (default), `date_desc`, `date_asc`. |
 | `page`      | integer | No       | Page number for pagination. Default: `1`. |
 | `per_page`  | integer | No       | Results per page. Default: `20`. |
-| `debug`     | boolean | No       | If `true`, returns verbose explanation of scoring. |
+| `api_master_key` | string | No | Optional. Master Key if not using Bearer token. |
 
 #### Success Response
 - **Code**: 200 OK
@@ -202,7 +245,7 @@ The `match_score` is a weighted calculation (1-10) factoring in:
 }
 ```
 
-### 2. Categories
+### 3. Categories [Auth Required]
 
 List all available categories with metadata.
 
@@ -279,7 +322,7 @@ GET /api/v1/categories
 | 500 | Internal server error |
 | 503 | Service unavailable (cache not ready) |
 
-### 3. Random Topic Discovery (`GET /api/v1/topic`)
+### 4. Random Topic Discovery [Auth Required] (`GET /api/v1/topic`)
 
 Returns a random topic derived from current indexed records for discovery.
 
@@ -368,7 +411,7 @@ GET /api/v1/health
 | 200 | Healthy or degraded |
 | 503 | Unhealthy (critical services down) |
 
-### 5. Statistics
+### 6. Statistics [Auth Required]
 
 Get system statistics and metrics.
 
@@ -744,16 +787,6 @@ Response times depend on hardware and cache status. Typical values:
 Planned features for future versions:
 
 **v2.0.0:**
-- API key authentication
-- Advanced search operators (AND, OR, NOT, phrase search)
-- Fuzzy matching and typo tolerance
-- Relevance ranking
-- Search suggestions
-- Highlighted snippets
-- Date range filtering
-- Sorting options (relevance, date, title)
-
-**v3.0.0:**
 - GraphQL endpoint
 - Webhooks for index updates
 - Bulk search API

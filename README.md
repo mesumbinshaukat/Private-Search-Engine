@@ -28,23 +28,30 @@ Laravel serves as the orchestration framework, providing job queuing, scheduling
 Implements polite, ethical web crawling with robots.txt compliance, per domain rate limiting, and comprehensive HTTP validation. Handles 429, 5xx, redirects, and timeouts gracefully.
 
 **Parser Service**  
-Extracts structured data from raw HTML including title, canonical URL, meta description, and publish date. Implements URL normalization and duplicate detection via canonical URLs and content hashes.
+Extracts structured data from raw HTML including title, canonical URL, meta description, and publish date. Implements global duplicate detection via canonical URLs and content hashes across all categories.
 
 **Indexer Service**  
-Groups parsed records by category, enforces minimum record count (1000 per category), removes data older than 5 days, and generates deterministic JSON output with metadata headers.
+Manages incremental indexing by merging new records with existing JSON data from Google Drive. Enforces 5-day data retention, deduplicates records, and generates timestamped JSON output.
 
 **Storage Service**  
 Manages JSON file lifecycle including generation, validation, upload to Google Drive, and integrity verification via checksums.
 
 **Search API**  
-Versioned REST API that serves search results from local cache (synced from Google Drive) with support for pagination, category filtering, and graceful handling of stale or missing data.
+Versioned REST API secured by Laravel Sanctum and Master API Key. Serves search results from local cache (synced and merged from Google Drive).
 
 **Cache Manager**  
-Maintains local cache of index files downloaded from Google Drive for fast API serving. Implements atomic updates and cache invalidation.
+Maintains local cache by downloading and merging ALL relevant index files from Google Drive for each category.
 
 ## Data Lifecycle
 
-### Daily Refresh Cycle
+### Master Refresh Cycle (Recommended)
+
+The entire system lifecycle is orchestrated via a single master command that runs sequentially:
+`Crawl → Process → Index → Upload → Cache Refresh`
+
+This can be triggered manually via `php artisan master:refresh` or automatically via the daily scheduler.
+
+### Detailed Daily Phases
 
 1. **Crawl Phase** (00:00 - 02:00)
    - Queue crawl jobs for seed URLs across all categories
@@ -55,13 +62,13 @@ Maintains local cache of index files downloaded from Google Drive for fast API s
 2. **Parse Phase** (02:00 - 03:00)
    - Extract structured data from raw HTML
    - Normalize URLs and detect duplicates
-   - Filter invalid records
+   - **Global Duplicate Check**: Skips any URL or content hash already existing in any category.
 
 3. **Index Phase** (03:00 - 04:00)
-   - Group records by category
-   - Enforce minimum 1000 records per category
-   - Remove data older than 5 days
-   - Generate deterministic JSON files
+   - Fetch existing records from Google Drive
+   - Merge with new local records and deduplicate
+   - Enforce 5-day age limit (records > 5 days are purged)
+   - Generate timestamped JSON files if an index for today already exists
 
 4. **Cleanup Phase** (04:00 - 04:30)
    - Remove temporary crawl data
@@ -70,13 +77,14 @@ Maintains local cache of index files downloaded from Google Drive for fast API s
 5. **Upload Phase** (04:30 - 05:00)
    - Upload validated JSON to Google Drive
    - Verify upload integrity via checksums
+   - Skip upload if no new unique records were found
 
 6. **Cache Refresh Phase** (05:00 - 05:30)
-   - Download latest index files from Google Drive
+   - Download and merge all valid JSON files from Drive per category
    - Update local cache atomically
 
 7. **Serve Phase** (Always Active)
-   - API endpoints serve search results from local cache
+   - API endpoints serve search results from local cache (Sanctum or Master Key required)
    - Handle stale or missing data gracefully
 
 ### Data Retention
@@ -101,7 +109,9 @@ Each category must maintain a minimum record count (default: 5). If this thresho
 ## Security Posture
 
 ### Authentication
-API endpoints are currently unauthenticated as this is a private, local development system. Production deployment would require API key authentication.
+The system is secured using two primary methods:
+1. **Laravel Sanctum**: Used for the Search UI. Users must log in via a secure modal. Tokens are managed via session-based cookies or local storage.
+2. **Master API Key**: Used for cross-service authentication. Accessible via `X-API-MASTER-KEY` header or `api_master_key` query parameter.
 
 ### Rate Limiting
 - Crawling: Maximum 1 request per second per domain
@@ -174,7 +184,24 @@ This system supports two authentication methods for Google Drive:
 
 ## Quick Start Commands
 
-Run these commands in order to execute the full data lifecycle:
+### 1. Initial Setup
+Run these commands to set up the environment and database:
+
+```bash
+cp .env.example .env
+php artisan key:generate
+touch database/database.sqlite
+php artisan migrate --seed --class=CreateUserSeeder
+```
+
+### 2. The Master Command (Full Cycle)
+Run the entire lifecycle sequentially:
+```bash
+php artisan master:refresh
+```
+
+### 3. Individual Lifecycle Commands
+If you prefer to run phases manually:
 
 1. **Authorize** (First time only):
    ```bash
@@ -211,23 +238,25 @@ Run these commands in order to execute the full data lifecycle:
    php artisan upload:index
    ```
 
-6. **Discover**: Get a random topic for discovery.
-   ```bash
-   curl "http://localhost:8000/api/v1/topic"
-   ```
-
-7. **Search**: Start the server and visit `http://localhost:8000`.
-   ```bash
-   php artisan serve
-   ```
-
-8. **Initial Cache Sync**
+6. **Initial Cache Sync**
 
 If you have already generated indexes and uploaded them to Google Drive (e.g., from a local environment or a previous run), you **must** synchronize the production cache:
 
 ```bash
 php artisan cache:refresh
 ```
+
+7. **Discover**: Get a random topic for discovery.
+   ```bash
+   curl "http://localhost:8000/api/v1/topic"
+   ```
+
+8. **Search**: Start the server and visit `http://localhost:8000`.
+   ```bash
+   php artisan serve
+   ```
+
+
 
 ## Documentation Reference
 

@@ -16,35 +16,60 @@ class RefreshCacheCommand extends Command
     {
         $this->info('Refreshing cache from Google Drive...');
 
-        $latestIndexes = IndexMetadata::uploaded()
-            ->latest('uploaded_at')
-            ->get()
-            ->groupBy('category')
-            ->map(fn($group) => $group->first());
+        $categories = config('categories.valid_categories');
 
-        if ($latestIndexes->isEmpty()) {
-            $this->warn('No uploaded indexes found');
-            return Command::FAILURE;
-        }
-
-        foreach ($latestIndexes as $category => $metadata) {
-            $this->info("Downloading {$category}...");
-
-            $cacheFile = "cache/{$category}.json";
+        foreach ($categories as $category) {
+            $this->info("Processing category: {$category}");
             
-            if ($metadata->google_drive_file_id) {
-                $success = $storage->downloadIndex($metadata->google_drive_file_id, $cacheFile);
+            // List all files on Drive for this category
+            $files = $storage->listFiles("name contains '{$category}_' and name contains '.json'");
+            
+            if (empty($files)) {
+                $this->warn("No files found on Drive for category: {$category}");
+                continue;
+            }
 
-                if ($success) {
-                    $this->info("✓ {$category} cached");
+            $allRecords = [];
+            $maxAgeDays = config('indexer.max_data_age_days', 5);
+            $cutoffDate = now()->subDays($maxAgeDays);
+
+            foreach ($files as $file) {
+                $this->info("  Downloading {$file->name}...");
+                $tempPath = "temp/" . $file->name;
+                
+                if ($storage->downloadIndex($file->id, $tempPath)) {
+                    $content = Storage::get($tempPath);
+                    $data = json_decode($content, true);
+                    
+                    if ($data && isset($data['records'])) {
+                        foreach ($data['records'] as $record) {
+                            $indexedAt = isset($record['indexed_at']) ? \Illuminate\Support\Carbon::parse($record['indexed_at']) : null;
+                            if ($indexedAt && $indexedAt->greaterThanOrEqualTo($cutoffDate)) {
+                                $url = $record['url'];
+                                $allRecords[$url] = $record; // Use URL as key for deduplication
+                            }
+                        }
+                    }
+                    Storage::delete($tempPath);
                 } else {
-                    $this->error("✗ {$category} download failed");
+                    $this->error("  ✗ Failed to download {$file->name}");
                 }
-            } else {
-                if (Storage::exists($metadata->file_path)) {
-                    Storage::copy($metadata->file_path, $cacheFile);
-                    $this->info("✓ {$category} cached from local");
-                }
+            }
+
+            if (!empty($allRecords)) {
+                $cacheFile = "cache/{$category}.json";
+                $mergedData = [
+                    'meta' => [
+                        'category' => $category,
+                        'generated_at' => now()->toIso8601String(),
+                        'record_count' => count($allRecords),
+                        'schema_version' => config('indexer.schema_version', '1.0'),
+                    ],
+                    'records' => array_values($allRecords),
+                ];
+
+                Storage::put($cacheFile, json_encode($mergedData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+                $this->info("✓ {$category} cache updated with " . count($allRecords) . " records");
             }
         }
 
