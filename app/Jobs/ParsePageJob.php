@@ -54,19 +54,28 @@ class ParsePageJob implements ShouldQueue
         $existing = ParsedRecord::where('canonical_url', $parsed['canonical_url'])->first();
         
         if ($existing) {
-            // Check if we should update or skip (e.g. if content hash matches)
-            // The user wants to keep update logic for freshness.
-            $existing->update([
-                'title' => $parsed['title'],
-                'description' => $parsed['description'],
-                'published_at' => $parsed['published_at'],
-                'content_hash' => $parsed['content_hash'],
-                'category' => $this->crawlJob->category, // Update category if found via different path
-                'parsed_at' => now(),
-            ]);
-            Log::info('Record updated (canonical match)', ['url' => $this->crawlJob->url, 'id' => $existing->id]);
-        } else {
-            // Also check by raw URL just in case canonicalization failed or is different
+            $isOld = $existing->parsed_at && $existing->parsed_at->lt(now()->subDays(7));
+
+            if ($isOld) {
+                Log::info('Record is older than 7 days, replacing for freshness', ['url' => $this->crawlJob->url, 'id' => $existing->id]);
+                $existing->delete();
+                $existing = null; // Forces creation below
+            } else {
+                // Update logic for freshness (content/meta updates)
+                $existing->update([
+                    'title' => $parsed['title'],
+                    'description' => $parsed['description'],
+                    'published_at' => $parsed['published_at'],
+                    'content_hash' => $parsed['content_hash'],
+                    'category' => $this->crawlJob->category, 
+                    'parsed_at' => now(),
+                ]);
+                Log::info('Record updated (canonical match)', ['url' => $this->crawlJob->url, 'id' => $existing->id]);
+            }
+        }
+
+        if (!$existing) {
+            // Also check by raw URL just in case
             $existingByUrl = ParsedRecord::where('url', $parsed['url'])->first();
             
             if ($existingByUrl) {
@@ -113,6 +122,10 @@ class ParsePageJob implements ShouldQueue
         $links = $parser->extractLinks($html, $this->crawlJob->url);
         $domain = parse_url($this->crawlJob->url, PHP_URL_HOST);
         $normalizer = app(\App\Services\UrlNormalizer::class);
+        $allowedExternal = config('crawler.allowed_external_domains', []);
+        
+        // Smart filtering keywords based on category
+        $keywords = ['tech', 'ai', 'sport', 'business', 'news', 'politics', 'science'];
 
         foreach ($links as $link) {
             $link = $normalizer->normalize($link);
@@ -121,9 +134,29 @@ class ParsePageJob implements ShouldQueue
                 break;
             }
 
-            // Only follow links within the same domain
-            if (parse_url($link, PHP_URL_HOST) !== $domain) {
-                continue;
+            $linkHost = parse_url($link, PHP_URL_HOST);
+
+            // Cross-domain discovery logic
+            if ($linkHost !== $domain) {
+                if (!empty($allowedExternal)) {
+                    // Only follow if in the allowed list
+                    if (!in_array($linkHost, $allowedExternal)) {
+                        continue;
+                    }
+                } else {
+                    // Smart fallback: check if host/path contains category-relevant keywords
+                    $searchable = strtolower($link);
+                    $hasKeyword = false;
+                    foreach ($keywords as $kw) {
+                        if (str_contains($searchable, $kw)) {
+                            $hasKeyword = true;
+                            break;
+                        }
+                    }
+                    if (!$hasKeyword) {
+                        continue;
+                    }
+                }
             }
 
             // Check if URL has failed before (rate limited, etc)

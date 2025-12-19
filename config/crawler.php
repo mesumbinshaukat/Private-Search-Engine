@@ -29,4 +29,6 @@ return [
     'exponential_backoff_multiplier' => env('CRAWLER_BACKOFF_MULTIPLIER', 2),
 
     'max_crawls_per_category' => env('CRAWLER_MAX_CRAWLS_PER_CATEGORY', 10),
+
+    'allowed_external_domains' => array_filter(explode(',', env('CRAWLER_ALLOWED_EXTERNAL_DOMAINS', ''))),
 ];

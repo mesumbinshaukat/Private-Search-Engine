@@ -9,7 +9,7 @@ Artisan::command('inspire', function () {
 
 // Process queue in safe batches every minute to prevent overlaps and long processes
 // This is critical for shared hosting (Hostinger/hPanel) reliability
-\Illuminate\Support\Facades\Schedule::command('queue:work database --stop-when-empty --tries=3 --timeout=300')
+\Illuminate\Support\Facades\Schedule::command('queue:work database --stop-when-empty --tries=3 --timeout=300 --max-jobs=' . env('QUEUE_BATCH_MAX_JOBS', 100))
     ->everyMinute()
     ->withoutOverlapping()
     ->runInBackground();

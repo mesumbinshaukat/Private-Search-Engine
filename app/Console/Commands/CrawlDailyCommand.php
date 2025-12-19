@@ -26,6 +26,9 @@ class CrawlDailyCommand extends Command
             $this->info('Resuming crawl cycle. Existing progress will be preserved.');
         }
 
+        $maxCrawls = config('crawler.max_crawls_per_category', 10);
+        $this->info(">>> Crawl Limit: {$maxCrawls} pages per category/day.");
+
         $totalJobsDispatched = 0;
 
         foreach ($categories as $cat) {

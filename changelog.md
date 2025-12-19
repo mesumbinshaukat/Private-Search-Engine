@@ -1,3 +1,14 @@
+## [2025-12-20 04:45:34] - Enabled Cross-Domain Discovery & Record Growth
+
+### Added
+- **Cross-Domain Discovery**: Relaxed the strict same-domain restriction in `ParsePageJob`. The crawler can now follow high-quality external links.
+- **Smart Discovery Filtering**: Integrated an optional `CRAWLER_ALLOWED_EXTERNAL_DOMAINS` allow-list. If empty, it falls back to a keyword-based filter (tech, ai, sports, etc.) to keep discovery relevant.
+- **Record Freshness (7-Day Rule)**: Updated duplicate logic to automatically delete and recreate `ParsedRecord` entries if they are older than 7 days, ensuring search results stay current with new content.
+
+### Changed
+- **Scheduler Batching**: Updated the per-minute queue worker in `routes/console.php` to explicitly use the `--max-jobs` limit from environment variables.
+- **Crawl Transparency**: `CrawlDailyCommand` now explicitly prints the current `CRAWLER_MAX_CRAWLS_PER_CATEGORY` limit at the start of each run.
+
 ## [2025-12-20 04:15:34] - Shared Hosting Optimizations (Hostinger/hPanel)
 
 ### Added
