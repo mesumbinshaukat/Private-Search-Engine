@@ -5,13 +5,13 @@ return [
     
     'max_data_age_days' => env('INDEXER_MAX_DATA_AGE_DAYS', 5),
     
-    'schema_version' => '1.0',
+    'schema_version' => env('INDEXER_SCHEMA_VERSION', '1.0'),
     
     'json_pretty_print' => env('INDEXER_JSON_PRETTY_PRINT', true),
     
-    'deterministic_sorting' => true,
+    'deterministic_sorting' => env('INDEXER_DETERMINISTIC_SORTING', true),
     
-    'include_metadata' => true,
+    'include_metadata' => env('INDEXER_INCLUDE_METADATA', true),
     
-    'checksum_algorithm' => 'sha256',
+    'checksum_algorithm' => env('INDEXER_CHECKSUM_ALGORITHM', 'sha256'),
 ];

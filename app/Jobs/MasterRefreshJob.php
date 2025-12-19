@@ -14,11 +14,11 @@ class MasterRefreshJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $timeout = 3600; // 1 hour timeout
+    public $timeout;
 
     public function __construct()
     {
-        //
+        $this->timeout = config('search.master_refresh_timeout', 3600);
     }
 
     public function handle(): void
@@ -39,13 +39,12 @@ class MasterRefreshJob implements ShouldQueue
             try {
                 $this->runCommand($cmd['name'], $cmd['params']);
             } catch (\Exception $e) {
-                Log::error("MasterRefreshJob failed at step: {$cmd['name']}", [
+                Log::error("MasterRefreshJob aborted at step: {$cmd['name']}", [
                     'error' => $e->getMessage()
                 ]);
                 
-                // Continue with next steps if possible, or stop?
-                // For critical steps like crawling/indexing, we might want to continue to next categories if it wasn't a total failure
-                // But generally if indexing fails, uploading/refreshing might be stale.
+                // Stop the entire cycle if any step fails to prevent cascading issues
+                break;
             }
         }
 

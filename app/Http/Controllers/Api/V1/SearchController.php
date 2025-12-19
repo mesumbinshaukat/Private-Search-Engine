@@ -21,7 +21,7 @@ class SearchController extends Controller
         $query = $request->input('q');
         $category = $request->input('category', 'all');
         $page = $request->input('page', 1);
-        $perPage = $request->input('per_page', 20);
+        $perPage = $request->input('per_page', config('search.default_per_page', 20));
         
         // New optional params
         $fromDate = $request->input('from_date');
@@ -78,7 +78,7 @@ class SearchController extends Controller
             $duration = microtime(true) - $startTime;
             $memoryUsed = memory_get_usage() - $startMemory;
 
-            if ($duration > 2.0) {
+            if ($duration > config('search.slow_threshold_seconds', 2.0)) {
                 Log::warning("Slow search detected", [
                     'query' => $query,
                     'duration' => $duration,

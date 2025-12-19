@@ -193,7 +193,7 @@ class AdvancedSearchService
     protected function highlight(string $text, string $query): string
     {
         $terms = explode(' ', strtolower(preg_replace('/[^\w\s]/', '', $query)));
-        $terms = array_filter($terms, fn($t) => strlen($t) > 2);
+        $terms = array_filter($terms, fn($t) => strlen($t) > config('search.min_highlight_term_length', 2));
         
         foreach ($terms as $term) {
             $text = preg_replace('/(' . preg_quote($term, '/') . ')/i', '<mark>$1</mark>', $text);
@@ -238,7 +238,7 @@ class AdvancedSearchService
         // Simple heuristic: normalize score by query length/complexity
         $termCount = count(explode(' ', $query)) ?: 1;
         $normalized = $score / ($termCount * 5); 
-        return (float) max(0.2, min(1.0, round($normalized, 2)));
+        return (float) max(config('search.min_confidence_score', 0.2), min(1.0, round($normalized, 2)));
     }
 
     public function suggest(string $query, array $records): array
