@@ -1,3 +1,9 @@
+### Added
+- **Manual Trigger API**: Created `POST /api/v1/trigger-refresh` (accessible via Master Key or Sanctum) to allow manual initiation of the `MasterRefreshJob`.
+- **UI Refresh Button**: Added a "↻ Refresh Crawler" button to the search dashboard for authorized users.
+- **"Poor Man's Cron"**: Implemented opportunistic scheduler execution in `AppServiceProvider.php`. The system will now attempt to run scheduled tasks on web hits (throttled to once per minute) if no system cron is available.
+- **Dual-Auth API Support**: Restored `master_key` middleware to all search endpoints, allowing authentication via either a Sanctum token (Bearer) or the `API_MASTER_KEY` (X-API-MASTER-KEY header or query param).
+
 ## [2025-12-20 04:45:34] - Enabled Cross-Domain Discovery & Record Growth
 
 ### Added

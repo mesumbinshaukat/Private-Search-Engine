@@ -37,5 +37,18 @@ class AppServiceProvider extends ServiceProvider
                 'exception' => $event->exception->getMessage(),
             ]);
         });
+
+        // "Poor Man's Cron" - Opportunistic scheduler execution
+        // This runs the scheduler on web hits if no real cron is set up
+        if (!$this->app->runningInConsole()) {
+            $lock = \Illuminate\Support\Facades\Cache::lock('poor-mans-cron', 60);
+            if ($lock->get()) {
+                try {
+                    \Illuminate\Support\Facades\Artisan::call('schedule:run');
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::warning('Poor Man\'s Cron failed: ' . $e->getMessage());
+                }
+            }
+        }
     }
 }

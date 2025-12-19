@@ -333,6 +333,9 @@
         <span><span class="dot"></span> System Live</span>
         <span id="total-records">Records: --</span>
         <span id="last-update">Last Sync: --</span>
+        <button id="refresh-crawler-btn" style="display: none; background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border); color: var(--text-muted); padding: 0.2rem 0.6rem; border-radius: 6px; font-size: 0.7rem; cursor: pointer; transition: all 0.2s ease;">
+            ↻ Refresh Crawler
+        </button>
     </div>
 
     <div id="login-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); z-index: 1000; align-items: center; justify-content: center;">
@@ -366,6 +369,7 @@
         const loginModal = document.getElementById('login-modal');
         const loginForm = document.getElementById('login-form');
         const loginError = document.getElementById('login-error');
+        const refreshCrawlerBtn = document.getElementById('refresh-crawler-btn');
         
         let currentCategory = 'all';
 
@@ -427,7 +431,37 @@
 
         if (checkAuth()) {
             fetchStats();
+            refreshCrawlerBtn.style.display = 'inline-block';
         }
+
+        refreshCrawlerBtn.addEventListener('click', async () => {
+            if (!confirm('This will trigger a full crawl/index cycle in the background. Proceed?')) return;
+            
+            const originalText = refreshCrawlerBtn.textContent;
+            refreshCrawlerBtn.textContent = 'Triggering...';
+            refreshCrawlerBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/v1/trigger-refresh', {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    }
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    alert('✓ Refresh process started. It will run in background chunks.');
+                } else {
+                    alert('! Failed: ' + (data.message || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('! Connection error triggering refresh.');
+            } finally {
+                refreshCrawlerBtn.textContent = originalText;
+                refreshCrawlerBtn.disabled = false;
+            }
+        });
 
         categoryTabs.forEach(tab => {
             tab.addEventListener('click', () => {

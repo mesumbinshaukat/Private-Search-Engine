@@ -31,6 +31,11 @@ Route::prefix('v1')->group(function () {
         Route::get('/topic', [SearchController::class, 'getRandomTopic'])->middleware('throttle:60,1');
         Route::get('/categories', [CategoryController::class, 'index'])->middleware('throttle:60,1');
         Route::get('/stats', [StatsController::class, 'show'])->middleware('throttle:60,1');
+        
+        Route::post('/trigger-refresh', function () {
+            \Illuminate\Support\Facades\Artisan::call('master:refresh', ['--async' => true]);
+            return response()->json(['status' => 'success', 'message' => 'Master refresh triggered in background']);
+        });
     });
 
     Route::get('/health', [HealthController::class, 'check']);

@@ -61,3 +61,14 @@ php artisan schedule:list
 | **Database** | SQLite WAL Mode | Resolves "Database Locked" errors |
 | **Resumption** | Idempotent Jobs | Continues after crashes |
 | **Monitoring** | Log tailing | Easy debugging |
+
+---
+
+## 5. Fallback: "Poor Man's Cron"
+If you absolutely cannot set up a system cron job, the system includes a fallback mechanism:
+
+1.  **Web-Triggered**: Every time someone visits the search page, the system checks if it should run scheduled tasks (limited to once per minute to save resources).
+2.  **Manual Trigger**: Click the **↻ Refresh Crawler** button in the UI (visible after login) to immediately dispatch a refresh cycle.
+
+> [!WARNING]
+> The web-triggered fallback requires constant traffic to be reliable. For mission-critical background processing, the system cron (`schedule:run`) is still highly recommended.
