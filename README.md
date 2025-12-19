@@ -221,6 +221,14 @@ Run these commands in order to execute the full data lifecycle:
    php artisan serve
    ```
 
+8. **Initial Cache Sync**
+
+If you have already generated indexes and uploaded them to Google Drive (e.g., from a local environment or a previous run), you **must** synchronize the production cache:
+
+```bash
+php artisan cache:refresh
+```
+
 ## Documentation Reference
 
 - **[DEPLOYMENT.md](DEPLOYMENT.md)**: Detailed setup for OAuth and environment.

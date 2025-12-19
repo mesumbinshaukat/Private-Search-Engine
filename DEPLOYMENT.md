@@ -115,6 +115,16 @@ chmod -R 775 storage
 chmod -R 775 bootstrap/cache
 ```
 
+### 7. Initial Cache Sync
+
+If you have already generated indexes and uploaded them to Google Drive (e.g., from a local environment or a previous run), you **must** synchronize the production cache:
+
+```bash
+php artisan cache:refresh
+```
+
+This command downloads the latest indices from Google Drive into `storage/app/private/cache`, which is required for the search API to return results.
+
 ## Google Drive Authentication Strategy
 
 ### Development Environment (Mocked)
