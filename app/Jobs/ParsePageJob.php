@@ -50,29 +50,48 @@ class ParsePageJob implements ShouldQueue
             return;
         }
 
+        // Check for existing record by canonical URL (global check)
         $existing = ParsedRecord::where('canonical_url', $parsed['canonical_url'])->first();
         
         if ($existing) {
+            // Check if we should update or skip (e.g. if content hash matches)
+            // The user wants to keep update logic for freshness.
             $existing->update([
                 'title' => $parsed['title'],
                 'description' => $parsed['description'],
                 'published_at' => $parsed['published_at'],
                 'content_hash' => $parsed['content_hash'],
+                'category' => $this->crawlJob->category, // Update category if found via different path
                 'parsed_at' => now(),
             ]);
-            Log::info('Updated existing record', ['url' => $this->crawlJob->url]);
+            Log::info('Record updated (canonical match)', ['url' => $this->crawlJob->url, 'id' => $existing->id]);
         } else {
-            ParsedRecord::create([
-                'url' => $parsed['url'],
-                'canonical_url' => $parsed['canonical_url'],
-                'title' => $parsed['title'],
-                'description' => $parsed['description'],
-                'published_at' => $parsed['published_at'],
-                'category' => $this->crawlJob->category,
-                'content_hash' => $parsed['content_hash'],
-                'parsed_at' => now(),
-            ]);
-            Log::info('Parse completed - new record', ['url' => $this->crawlJob->url]);
+            // Also check by raw URL just in case canonicalization failed or is different
+            $existingByUrl = ParsedRecord::where('url', $parsed['url'])->first();
+            
+            if ($existingByUrl) {
+                $existingByUrl->update([
+                    'canonical_url' => $parsed['canonical_url'],
+                    'title' => $parsed['title'],
+                    'description' => $parsed['description'],
+                    'published_at' => $parsed['published_at'],
+                    'content_hash' => $parsed['content_hash'],
+                    'parsed_at' => now(),
+                ]);
+                Log::info('Record updated (URL match)', ['url' => $this->crawlJob->url, 'id' => $existingByUrl->id]);
+            } else {
+                ParsedRecord::create([
+                    'url' => $parsed['url'],
+                    'canonical_url' => $parsed['canonical_url'],
+                    'title' => $parsed['title'],
+                    'description' => $parsed['description'],
+                    'published_at' => $parsed['published_at'],
+                    'category' => $this->crawlJob->category,
+                    'content_hash' => $parsed['content_hash'],
+                    'parsed_at' => now(),
+                ]);
+                Log::info('New record created', ['url' => $this->crawlJob->url]);
+            }
         }
 
         $this->discoverLinks($parser, $html);

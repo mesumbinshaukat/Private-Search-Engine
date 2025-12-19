@@ -21,28 +21,50 @@ class MasterRefreshCommand extends Command
         } else {
             $this->info('Running Master Refresh Cycle synchronously...');
 
+            if ($isFresh) {
+                $this->warn('!!! FRESH START REQUESTED !!!');
+                $this->info('Wiping all ParsedRecords and CrawlJobs...');
+                \App\Models\ParsedRecord::truncate();
+                \App\Models\CrawlJob::truncate();
+                $this->info('✓ Database wiped.');
+            }
+
+            $maxJobs = env('QUEUE_BATCH_MAX_JOBS', 100);
+
             $commands = [
                 ['name' => 'crawl:daily', 'params' => ['--fresh' => $isFresh]],
-                ['name' => 'queue:work', 'params' => ['--stop-when-empty' => true]],
+                ['name' => 'queue:work', 'params' => ['--stop-when-empty' => true, '--max-jobs' => $maxJobs, '--tries' => 3]],
                 ['name' => 'index:generate', 'params' => []],
                 ['name' => 'upload:index', 'params' => []],
                 ['name' => 'cache:refresh', 'params' => []],
                 ['name' => 'queue:status', 'params' => []],
             ];
 
-            foreach ($commands as $cmd) {
+            foreach ($commands as $index => $cmd) {
+                $stepNum = $index + 1;
+                $totalSteps = count($commands);
                 $this->newLine();
-                $this->info(">>> Executing Step: {$cmd['name']}");
+                $this->info(">>> [Step {$stepNum}/{$totalSteps}] Executing: {$cmd['name']}");
                 
+                $startTime = microtime(true);
                 $exitCode = $this->call($cmd['name'], $cmd['params']);
+                $duration = round(microtime(true) - $startTime, 2);
                 
-                if ($exitCode !== 0) {
-                    $this->warn("! Step {$cmd['name']} reported a non-zero exit code ({$exitCode}). Continuing anyway...");
+                if ($exitCode === 0) {
+                    $this->info("✓ Step {$cmd['name']} completed in {$duration}s.");
+                } else {
+                    $this->error("! Step {$cmd['name']} failed with exit code {$exitCode} after {$duration}s.");
+                    if (!$isFresh) {
+                        $this->warn("Resumable mode: Continuing to next step...");
+                    } else {
+                        $this->error("Fresh mode: Stopping refresh cycle due to failure.");
+                        return Command::FAILURE;
+                    }
                 }
             }
 
             $this->newLine();
-            $this->info('✓ Master Refresh Cycle completed successfully.');
+            $this->info('✓ Master Refresh Cycle finished.');
         }
 
         return Command::SUCCESS;

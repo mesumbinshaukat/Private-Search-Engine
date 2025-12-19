@@ -38,10 +38,13 @@ class CrawlDailyCommand extends Command
             $seedUrls = config("categories.categories.{$cat}.seed_urls", []);
             
             foreach ($seedUrls as $url) {
-                // Check if this seed is already in the system (pending or completed)
-                $exists = CrawlJob::where('url', $url)->where('category', $cat)->exists();
+                $existingJob = CrawlJob::where('url', $url)->where('category', $cat)->first();
 
-                if (!$exists || $isFresh) {
+                if (!$existingJob || $isFresh) {
+                    if ($isFresh && $existingJob) {
+                        $existingJob->delete();
+                    }
+
                     $crawlJob = CrawlJob::create([
                         'url' => $url,
                         'category' => $cat,
@@ -50,11 +53,20 @@ class CrawlDailyCommand extends Command
 
                     CrawlPageJob::dispatch($crawlJob);
                     $totalJobsDispatched++;
+                } else {
+                    $this->info("[-] Seed exists: {$url} [{$existingJob->status}]");
+                    
+                    // If it was pending, it might have been lost from the queue (worker crash)
+                    // We don't re-dispatch here to avoid ballooning the queue, 
+                    // as the scheduler/master:refresh will handle the queue work anyway.
+                    // But we could optionally re-dispatch if it's been pending for too long.
                 }
             }
         }
 
-        $this->info("Dispatched {$totalJobsDispatched} new seed jobs.");
+        $this->info(">>> Dispatched {$totalJobsDispatched} new seed jobs.");
+        $pendingCount = \App\Models\CrawlJob::where('status', CrawlJob::STATUS_PENDING)->count();
+        $this->info(">>> Total pending jobs in database: {$pendingCount}");
 
         return Command::SUCCESS;
     }

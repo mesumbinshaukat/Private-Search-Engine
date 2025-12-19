@@ -1,6 +1,19 @@
-# Changelog
+## [2025-12-20 04:15:34] - Shared Hosting Optimizations (Hostinger/hPanel)
 
-## [2025-12-20 01:23:34] - System Stabilization & Refresh Cycle Implementation
+### Added
+- **Scheduled Queue Worker**: Added a per-minute scheduled task in `routes/console.php` to process the queue in safe batches (`--stop-when-empty --max-jobs=100`). This ensures reliability on shared hosting by staying within LVE limits.
+- **Queue Fault Tolerance**: Implemented a global `Queue::failing` listener in `AppServiceProvider.php` to log job failures and identify queue stalls.
+- **Configurable Batching**: Introduced `QUEUE_BATCH_MAX_JOBS` environment variable to control the number of jobs processed per worker run.
+
+### Changed
+- **Master Refresh Robustness**: Refactored `master:refresh` to use chunked queue processing and improved logging per step. Enhanced `--fresh` flag to reliably wipe ParsedRecords and CrawlJobs.
+- **SQLite Concurrency**: Explicitly enabled SQLite **Write-Ahead Logging (WAL)** and **Normal Synchronous** mode in `AppServiceProvider.php` to maximize concurrent database access.
+- **Resumable Crawl Logic**: Updated `CrawlDailyCommand` to gracefully handle existing seeds and report total pending jobs, making the crawl cycle truly resumable.
+- **Duplicate Prevention**: Strengthened `ParsePageJob` with global canonical URL checks and fallback raw URL matching to prevent duplicate records across categories.
+
+### Fixed
+- **LVE Exit Code 12**: Resolved issues where long-running synchronous processes were killed by hosting provider limits by transitioning to chunked, scheduled background processing.
+- **Parsing Stalls**: Improved logging and error handling in `ParsePageJob` to ensure parsing failures are logged without blocking the worker.
 
 ### Fixed
 - **Seeding Error**: Resolved `Call to undefined function Database\Factories\fake()` in production environments by removing the `fakerphp/faker` dependency from `DatabaseSeeder.php` and redirecting to the production-safe `CreateUserSeeder`.
