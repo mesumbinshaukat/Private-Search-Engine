@@ -39,12 +39,11 @@ class MasterRefreshJob implements ShouldQueue
             try {
                 $this->runCommand($cmd['name'], $cmd['params']);
             } catch (\Exception $e) {
-                Log::error("MasterRefreshJob aborted at step: {$cmd['name']}", [
+                Log::error("MasterRefreshJob encountered an error at step: {$cmd['name']}", [
                     'error' => $e->getMessage()
                 ]);
                 
-                // Stop the entire cycle if any step fails to prevent cascading issues
-                break;
+                // We keep going even if a step failed, as requested.
             }
         }
 

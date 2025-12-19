@@ -7,11 +7,12 @@ use Illuminate\Console\Command;
 
 class MasterRefreshCommand extends Command
 {
-    protected $signature = 'master:refresh {--async : Run the refresh cycle asynchronously}';
+    protected $signature = 'master:refresh {--async : Run in background} {--fresh : Wipe progress and start from zero}';
     protected $description = 'Run the entire search engine refresh cycle (crawl, process, index, upload, cache)';
 
     public function handle()
     {
+        $isFresh = $this->option('fresh');
         $this->info('Triggering Master Refresh Cycle...');
 
         if ($this->option('async')) {
@@ -21,7 +22,7 @@ class MasterRefreshCommand extends Command
             $this->info('Running Master Refresh Cycle synchronously...');
 
             $commands = [
-                ['name' => 'crawl:daily', 'params' => []],
+                ['name' => 'crawl:daily', 'params' => ['--fresh' => $isFresh]],
                 ['name' => 'queue:work', 'params' => ['--stop-when-empty' => true]],
                 ['name' => 'index:generate', 'params' => []],
                 ['name' => 'upload:index', 'params' => []],
@@ -36,8 +37,7 @@ class MasterRefreshCommand extends Command
                 $exitCode = $this->call($cmd['name'], $cmd['params']);
                 
                 if ($exitCode !== 0) {
-                    $this->error("✗ Step {$cmd['name']} failed. Aborting refresh.");
-                    return Command::FAILURE;
+                    $this->warn("! Step {$cmd['name']} reported a non-zero exit code ({$exitCode}). Continuing anyway...");
                 }
             }
 

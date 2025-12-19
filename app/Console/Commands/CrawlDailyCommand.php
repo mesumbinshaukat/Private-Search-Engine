@@ -8,43 +8,53 @@ use Illuminate\Console\Command;
 
 class CrawlDailyCommand extends Command
 {
-    protected $signature = 'crawl:daily {--category=all : Category to crawl}';
-    protected $description = 'Trigger daily crawl cycle for all or specific category';
+    protected $signature = 'crawl:daily {--category=all : Category} {--fresh : Wipe current jobs and start from zero}';
+    protected $description = 'Trigger daily crawl cycle (supports resuming by default)';
 
     public function handle()
     {
         $category = $this->option('category');
+        $isFresh = $this->option('fresh');
         $categories = $category === 'all' 
             ? config('categories.valid_categories') 
             : [$category];
 
-        $this->info('Starting daily crawl for categories: ' . implode(', ', $categories));
+        if ($isFresh) {
+            $this->warn('Performing a FRESH crawl. Wiping existing job logs for categories...');
+            \App\Models\CrawlJob::whereIn('category', $categories)->delete();
+        } else {
+            $this->info('Resuming crawl cycle. Existing progress will be preserved.');
+        }
 
-        // Delete previous jobs for these categories only
-        \App\Models\CrawlJob::whereIn('category', $categories)->delete();
-
-        $totalJobs = 0;
+        $totalJobsDispatched = 0;
 
         foreach ($categories as $cat) {
-            // Reset the daily crawl count cache for each category to allow fresh discovery
             $today = now()->format('Y-m-d');
-            \Illuminate\Support\Facades\Cache::forget("crawl_count:{$cat}:{$today}");
+            
+            if ($isFresh) {
+                \Illuminate\Support\Facades\Cache::forget("crawl_count:{$cat}:{$today}");
+            }
             
             $seedUrls = config("categories.categories.{$cat}.seed_urls", []);
             
             foreach ($seedUrls as $url) {
-                $crawlJob = CrawlJob::create([
-                    'url' => $url,
-                    'category' => $cat,
-                    'status' => CrawlJob::STATUS_PENDING,
-                ]);
+                // Check if this seed is already in the system (pending or completed)
+                $exists = CrawlJob::where('url', $url)->where('category', $cat)->exists();
 
-                CrawlPageJob::dispatch($crawlJob);
-                $totalJobs++;
+                if (!$exists || $isFresh) {
+                    $crawlJob = CrawlJob::create([
+                        'url' => $url,
+                        'category' => $cat,
+                        'status' => CrawlJob::STATUS_PENDING,
+                    ]);
+
+                    CrawlPageJob::dispatch($crawlJob);
+                    $totalJobsDispatched++;
+                }
             }
         }
 
-        $this->info("Dispatched {$totalJobs} crawl jobs");
+        $this->info("Dispatched {$totalJobsDispatched} new seed jobs.");
 
         return Command::SUCCESS;
     }

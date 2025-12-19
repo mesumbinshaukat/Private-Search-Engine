@@ -6,6 +6,7 @@
 - **Seeding Error**: Resolved `Call to undefined function Database\Factories\fake()` in production environments by removing the `fakerphp/faker` dependency from `DatabaseSeeder.php` and redirecting to the production-safe `CreateUserSeeder`.
 - **Authentication**: Fixed "no such table: personal_access_tokens" error by publishing Sanctum migrations and ensuring they are run during setup.
 - **Crawl Depth**: Fixed an issue where the crawler would stop after 25 jobs regardless of limits. The crawler now correctly reaches the `CRAWLER_MAX_CRAWLS_PER_CATEGORY` (e.g., 800) by allowing link discovery on previously known pages.
+- **Master Refresh Logic**: Changed `master:refresh` to be **non-blocking** and **resumable**. By default, it will now pick up where it left off (idempotent). You can use the new `--fresh` flag to force a full reset and start from zero.
 - **Master Refresh Feedback**: Updated `php artisan master:refresh` to stream real-time output from all internal steps (including `queue:work`), allowing you to monitor high-volume crawls (2000+ jobs) directly from the terminal.
 
 ### Changed
