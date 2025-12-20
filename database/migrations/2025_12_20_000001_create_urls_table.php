@@ -13,8 +13,9 @@ return new class extends Migration
     {
         Schema::create('urls', function (Blueprint $table) {
             $table->id();
-            $table->string('normalized_url', 2048)->unique();
-            $table->string('original_url', 2048);
+            $table->string('original_url', 512);
+            $table->string('normalized_url', 512)->unique();
+            $table->string('url_hash', 64)->unique()->index();
             $table->string('host', 255)->index();
             $table->text('path')->nullable();
             $table->string('query_hash', 64)->nullable();
