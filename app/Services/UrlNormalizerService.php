@@ -24,20 +24,70 @@ class UrlNormalizerService
     public function normalize(string $url): ?array
     {
         try {
-            // Parse the URL
-            $parsed = parse_url(trim($url));
-            
-            if (!isset($parsed['scheme']) || !isset($parsed['host'])) {
+            // Pre-validation: check for empty or whitespace-only URLs
+            $url = trim($url);
+            if (empty($url)) {
+                Log::warning('URL normalization failed: empty URL');
                 return null;
             }
 
-            // 1. Lowercase scheme and host
+            // Auto-add scheme if missing (common case)
+            if (!preg_match('#^https?://#i', $url)) {
+                // Check if it looks like a domain (not a relative path)
+                if (preg_match('#^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*#i', $url)) {
+                    $url = 'https://' . $url;
+                    Log::info('Auto-added https:// scheme to URL', ['original' => trim($url), 'modified' => $url]);
+                }
+            }
+
+            // Parse the URL
+            $parsed = parse_url($url);
+            
+            // Explicitly check if parse_url failed (returns false on malformed URLs)
+            if ($parsed === false) {
+                Log::warning('URL normalization failed: parse_url returned false (malformed URL)', [
+                    'url' => $url,
+                ]);
+                return null;
+            }
+
+            // Validate required components
+            if (!isset($parsed['scheme']) || !isset($parsed['host'])) {
+                Log::warning('URL normalization failed: missing scheme or host', [
+                    'url' => $url,
+                    'has_scheme' => isset($parsed['scheme']),
+                    'has_host' => isset($parsed['host']),
+                ]);
+                return null;
+            }
+
+            // Validate scheme is http or https
             $scheme = strtolower($parsed['scheme']);
+            if (!in_array($scheme, ['http', 'https'])) {
+                Log::warning('URL normalization failed: unsupported scheme', [
+                    'url' => $url,
+                    'scheme' => $scheme,
+                ]);
+                return null;
+            }
+
+            // 1. Lowercase host
             $host = strtolower($parsed['host']);
+
+            // Validate host is not empty
+            if (empty($host)) {
+                Log::warning('URL normalization failed: empty host', ['url' => $url]);
+                return null;
+            }
 
             // 2. Handle Unicode/IDN (convert to punycode)
             if (function_exists('idn_to_ascii')) {
-                $host = idn_to_ascii($host, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46) ?: $host;
+                $idnHost = idn_to_ascii($host, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46);
+                if ($idnHost !== false) {
+                    $host = $idnHost;
+                } else {
+                    Log::warning('IDN conversion failed, using original host', ['host' => $host]);
+                }
             }
 
             // 3. Remove default ports
@@ -55,7 +105,7 @@ class UrlNormalizerService
             $normalizedQuery = $this->normalizeQuery($query);
             $queryHash = $normalizedQuery ? hash('sha256', $normalizedQuery) : null;
 
-            // 6. Build normalized URL (without fragment)
+            // 6. Build normalized URL (without fragment - fragments are client-side only)
             $normalized = $scheme . '://';
             $normalized .= $host;
             if ($port) {
@@ -78,9 +128,10 @@ class UrlNormalizerService
             ];
 
         } catch (\Exception $e) {
-            Log::warning('URL normalization failed', [
+            Log::warning('URL normalization failed with exception', [
                 'url' => $url,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
             return null;
         }
