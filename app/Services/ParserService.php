@@ -8,9 +8,9 @@ use Illuminate\Support\Facades\Log;
 
 class ParserService
 {
-    private UrlNormalizer $urlNormalizer;
+    private UrlNormalizerService $urlNormalizer;
 
-    public function __construct(UrlNormalizer $urlNormalizer)
+    public function __construct(UrlNormalizerService $urlNormalizer)
     {
         $this->urlNormalizer = $urlNormalizer;
     }
@@ -33,9 +33,12 @@ class ParserService
                     continue;
                 }
 
-                $absoluteUrl = $this->makeAbsolute($href, $baseUrl);
+                $absoluteUrl = $this->urlNormalizer->makeAbsolute($href, $baseUrl);
                 if ($absoluteUrl) {
-                    $absoluteLinks[] = $this->urlNormalizer->normalize($absoluteUrl);
+                    $normalized = $this->urlNormalizer->normalize($absoluteUrl);
+                    if ($normalized) {
+                        $absoluteLinks[] = $normalized['normalized'];
+                    }
                 }
             }
 
@@ -48,31 +51,6 @@ class ParserService
             ]);
             return [];
         }
-    }
-
-    private function makeAbsolute(string $url, string $baseUrl): ?string
-    {
-        if (parse_url($url, PHP_URL_SCHEME) != '') {
-            return $url;
-        }
-
-        $base = parse_url($baseUrl);
-        if (!isset($base['scheme']) || !isset($base['host'])) {
-            return null;
-        }
-
-        if (str_starts_with($url, '//')) {
-            return $base['scheme'] . ':' . $url;
-        }
-
-        if (str_starts_with($url, '/')) {
-            return $base['scheme'] . '://' . $base['host'] . $url;
-        }
-
-        $path = $base['path'] ?? '/';
-        $path = preg_replace('#/[^/]*$#', '/', $path);
-        
-        return $base['scheme'] . '://' . $base['host'] . $path . $url;
     }
 
     public function parse(string $html, string $originalUrl): ?array
@@ -95,12 +73,18 @@ class ParserService
                 return null;
             }
 
-            $normalizedCanonicalUrl = $this->urlNormalizer->normalize($canonicalUrl);
+            $normalizedData = $this->urlNormalizer->normalize($canonicalUrl);
+            if (!$normalizedData) {
+                Log::warning('URL normalization failed', ['url' => $canonicalUrl]);
+                return null;
+            }
+
             $contentHash = $this->generateContentHash($title, $description);
 
             return [
                 'url' => $originalUrl,
-                'canonical_url' => $normalizedCanonicalUrl,
+                'canonical_url' => $normalizedData['normalized'],
+                'url_hash' => $normalizedData['hash'],
                 'title' => $title,
                 'description' => $description,
                 'published_at' => $publishedAt,
