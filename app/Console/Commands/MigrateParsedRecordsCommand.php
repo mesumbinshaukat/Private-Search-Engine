@@ -131,7 +131,7 @@ class MigrateParsedRecordsCommand extends Command
             if (!$url) {
                 // Create new URL
                 $url = Url::create([
-                    'normalized_url' => $normalized['url'],
+                    'normalized_url' => $normalized['normalized'],
                     'url_hash' => $normalized['hash'],
                     'category' => $record->category,
                     'depth' => 0,
