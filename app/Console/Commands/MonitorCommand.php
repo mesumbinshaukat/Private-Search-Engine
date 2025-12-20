@@ -94,3 +94,4 @@ class MonitorCommand extends Command
         return self::SUCCESS;
     }
 }
+
