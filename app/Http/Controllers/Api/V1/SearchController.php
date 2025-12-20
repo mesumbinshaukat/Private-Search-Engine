@@ -30,112 +30,122 @@ class SearchController extends Controller
         $debug = $request->boolean('debug', false);
         $forceFuzzy = $request->boolean('fuzzy', false);
 
-        $startTime = microtime(true);
-        $startMemory = memory_get_usage();
+        // Auto-refresh check (1 hour)
+        if ($this->getCacheAge() > 3600) {
+            \Illuminate\Support\Facades\Artisan::call('cache:refresh');
+        }
 
-        try {
-            $records = $this->getRecords($category);
-            
-            // Apply Date Filtering
-            if ($fromDate || $toDate) {
-                $records = $this->filterByDate($records, $fromDate, $toDate);
-            }
+        // Cache Search Results (10 min)
+        $cacheKey = "search_results:" . $category . ":" . md5(serialize($request->all()));
+        
+        return \Illuminate\Support\Facades\Cache::remember($cacheKey, 600, function() use ($request, $query, $category, $page, $perPage, $fromDate, $toDate, $sort, $debug, $forceFuzzy) {
+            $startTime = microtime(true);
+            $startMemory = memory_get_usage();
 
-            $options = [
-                'debug' => $debug,
-                'no_fuzzy' => !$forceFuzzy && $request->has('q')
-            ];
-
-            if ($forceFuzzy) {
-                $results = $this->hybridSearch->fuzzySearch($query, $records, $category);
-            } else {
-                $results = $this->hybridSearch->search($query, $records, $category, $options);
-            }
-
-            if (empty($results)) {
-                $suggestions = $this->hybridSearch->suggest($query, $records);
+            try {
+                $records = $this->getRecords($category);
                 
+                // Apply Date Filtering
+                if ($fromDate || $toDate) {
+                    $records = $this->filterByDate($records, $fromDate, $toDate);
+                }
+
+                $options = [
+                    'debug' => $debug,
+                    'no_fuzzy' => !$forceFuzzy && $request->has('q')
+                ];
+
+                if ($forceFuzzy) {
+                    $results = $this->hybridSearch->fuzzySearch($query, $records, $category);
+                } else {
+                    $results = $this->hybridSearch->search($query, $records, $category, $options);
+                }
+
+                if (empty($results)) {
+                    $suggestions = $this->hybridSearch->suggest($query, $records);
+                    
+                    return response()->json([
+                        'status' => 'error',
+                        'error' => [
+                            'code' => 'NO_RESULTS',
+                            'message' => 'No results found for query',
+                            'query_suggestions' => $suggestions,
+                        ],
+                        'meta' => [
+                            'version' => 'v1',
+                            'timestamp' => now()->toIso8601String(),
+                        ],
+                    ], 404);
+                }
+
+                // Apply Sorting
+                $results = $this->sortResults($results, $sort);
+
+                $paginated = $this->paginateResults($results, $page, $perPage);
+                $indexDate = $this->getLatestIndexDate($results, $category);
+
+                $duration = microtime(true) - $startTime;
+                $memoryUsed = memory_get_usage() - $startMemory;
+
+                if ($duration > config('search.slow_threshold_seconds', 2.0)) {
+                    Log::warning("Slow search detected", [
+                        'query' => $query,
+                        'duration' => $duration,
+                        'memory' => $memoryUsed
+                    ]);
+                }
+
+                $responseData = [
+                    'status' => 'success',
+                    'data' => [
+                        'query' => $query,
+                        'category' => $category,
+                        'results' => $paginated['items'],
+                        'pagination' => $paginated['pagination'],
+                    ],
+                    'meta' => [
+                        'version' => 'v1',
+                        'timestamp' => now()->toIso8601String(),
+                        'cache_age_seconds' => $this->getCacheAge(),
+                        'index_date' => $indexDate,
+                        'performance' => [
+                            'time_ms' => round($duration * 1000, 2),
+                            'memory_mb' => round($memoryUsed / 1024 / 1024, 2)
+                        ]
+                    ],
+                ];
+
+                if ($debug) {
+                    $responseData['debug'] = [
+                        'total_scanned' => count($records),
+                        'total_matched' => count($results),
+                        'query_expansion' => $query . ' -> (stemmed terms)',
+                        'sort_method' => $sort,
+                    ];
+                }
+
+                return response()->json($responseData);
+
+            } catch (\Exception $e) {
+                Log::error('Search error', [
+                    'query' => $query,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+
                 return response()->json([
                     'status' => 'error',
                     'error' => [
-                        'code' => 'NO_RESULTS',
-                        'message' => 'No results found for query',
-                        'query_suggestions' => $suggestions,
+                        'code' => 'INTERNAL_ERROR',
+                        'message' => 'An unexpected error occurred',
                     ],
                     'meta' => [
                         'version' => 'v1',
                         'timestamp' => now()->toIso8601String(),
                     ],
-                ], 404);
+                ], 500);
             }
-
-            // Apply Sorting
-            $results = $this->sortResults($results, $sort);
-
-            $paginated = $this->paginateResults($results, $page, $perPage);
-            $indexDate = $this->getLatestIndexDate($results, $category);
-
-            $duration = microtime(true) - $startTime;
-            $memoryUsed = memory_get_usage() - $startMemory;
-
-            if ($duration > config('search.slow_threshold_seconds', 2.0)) {
-                Log::warning("Slow search detected", [
-                    'query' => $query,
-                    'duration' => $duration,
-                    'memory' => $memoryUsed
-                ]);
-            }
-
-            $response = [
-                'status' => 'success',
-                'data' => [
-                    'query' => $query,
-                    'category' => $category,
-                    'results' => $paginated['items'],
-                    'pagination' => $paginated['pagination'],
-                ],
-                'meta' => [
-                    'version' => 'v1',
-                    'timestamp' => now()->toIso8601String(),
-                    'cache_age_seconds' => $this->getCacheAge(),
-                    'index_date' => $indexDate,
-                    'performance' => [
-                        'time_ms' => round($duration * 1000, 2),
-                        'memory_mb' => round($memoryUsed / 1024 / 1024, 2)
-                    ]
-                ],
-            ];
-
-            if ($debug) {
-                $response['debug'] = [
-                    'total_scanned' => count($records),
-                    'total_matched' => count($results),
-                    'query_expansion' => $query . ' -> (stemmed terms)',
-                    'sort_method' => $sort,
-                ];
-            }
-
-            return response()->json($response);
-
-        } catch (\Exception $e) {
-            Log::error('Search error', [
-                'query' => $query,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return response()->json([
-                'status' => 'error',
-                'error' => [
-                    'code' => 'INTERNAL_ERROR',
-                    'message' => 'An unexpected error occurred',
-                ],
-                'meta' => [
-                    'version' => 'v1',
-                    'timestamp' => now()->toIso8601String(),
-                ],
-            ], 500);
-        }
+        });
     }
 
     public function getRandomTopic()

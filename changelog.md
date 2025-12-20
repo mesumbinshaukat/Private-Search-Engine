@@ -12,6 +12,8 @@
 - **Model Fillable**: Verified and ensured `url_hash` is present in `Url` model `$fillable` array.
 - **Config-Safe Auth**: Moved `API_MASTER_KEY` to `config/app.php` and updated middleware to use `config()` instead of `env()`, ensuring authentication works even when configuration is cached.
 - **API Guard**: Added missing `api` guard to `config/auth.php` for standard Sanctum integration.
+- **Enhanced Cache Refresh**: Updated `RefreshCacheCommand` to discover all category-prefixed JSON files on Google Drive, merge them with newest-record-first deduplication (by URL/Hash), and enforce a 30-day data retention limit.
+- **Search Optimization**: Instrumented `SearchController` with automatic 1-hour cache refresh triggers and 10-minute search result caching using Laravel's Cache facade.
 - **Environment Restoration**: Restored missing `.env` from `.env.production` to ensure system-wide availability of environment variables.
 
 ### Added

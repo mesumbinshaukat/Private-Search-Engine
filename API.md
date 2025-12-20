@@ -72,7 +72,7 @@ Authorization: Bearer {access_token}
 
 ### 2. Service-to-Service (Master Key)
 For trusted backend services or automated scripts:
-2. **Master API Key**: Used for cross-service authentication. Accessible via `X-API-MASTER-KEY` header, `Authorization` Bearer token, or `api_master_key` query parameter.
+Include the `API_MASTER_KEY` in the `X-API-MASTER-KEY` header, the `Authorization` header (as a Bearer token), or the `api_master_key` query parameter.
 
 ```http
 X-API-MASTER-KEY: your_master_key
