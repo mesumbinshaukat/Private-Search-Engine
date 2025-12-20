@@ -38,6 +38,7 @@ class CrawlPageJob implements ShouldQueue
             $urlRecord = Url::firstOrCreate(
                 ['url_hash' => $normalized['hash']],
                 [
+                    'url_hash' => $normalized['hash'],
                     'original_url' => $this->crawlJob->url,
                     'normalized_url' => $normalized['normalized'],
                     'host' => $normalized['host'],
