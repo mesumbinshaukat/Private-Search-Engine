@@ -291,6 +291,47 @@
             margin-right: 5px;
             box-shadow: 0 0 10px #10b981;
         }
+
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .toast {
+            min-width: 300px;
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            color: white;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            animation: toastIn 0.3s ease-out forwards;
+            transition: all 0.3s ease;
+        }
+
+        .toast.success { border-left: 4px solid #10b981; }
+        .toast.error { border-left: 4px solid #ef4444; }
+        .toast.warning { border-left: 4px solid #f59e0b; }
+
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateX(50px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .toast.fade-out {
+            opacity: 0;
+            transform: translateX(50px);
+        }
     </style>
 </head>
 <body>
@@ -371,6 +412,25 @@
         const loginError = document.getElementById('login-error');
         const refreshCrawlerBtn = document.getElementById('refresh-crawler-btn');
         
+        // Toast System
+        const toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container';
+        document.body.appendChild(toastContainer);
+
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `
+                <div style="flex-grow: 1;">${message}</div>
+                <div style="cursor: pointer; opacity: 0.5;" onclick="this.parentElement.remove()">✕</div>
+            `;
+            toastContainer.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('fade-out');
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
+        }
+
         let currentCategory = 'all';
 
         // Auth Check
@@ -450,13 +510,16 @@
                     }
                 });
                 const data = await response.json();
+                
                 if (response.ok) {
-                    alert('✓ Refresh process started. It will run in background chunks.');
+                    showToast('✓ Refresh process started. It will run in background chunks.', 'success');
+                } else if (response.status === 409) {
+                    showToast('⚠ ' + data.message, 'warning');
                 } else {
-                    alert('! Failed: ' + (data.message || 'Unknown error'));
+                    showToast('! Failed: ' + (data.message || 'Unknown error'), 'error');
                 }
             } catch (err) {
-                alert('! Connection error triggering refresh.');
+                showToast('! Connection error triggering refresh.', 'error');
             } finally {
                 refreshCrawlerBtn.textContent = originalText;
                 refreshCrawlerBtn.disabled = false;

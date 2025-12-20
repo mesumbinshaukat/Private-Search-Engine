@@ -1,3 +1,13 @@
+## [2025-12-20 05:15:34] - Concurrency Safety & Command Documentation
+
+### Added
+- **Refresh Cycle Lock**: Implemented `master_refresh_lock` (Cache-based) in `MasterRefreshJob` to prevent multiple refresh cycles from running concurrently.
+- **Improved UI Notifications**: Added a "Beautiful Toast" notification system to the search dashboard for non-intrusive feedback.
+- **"Busy" State Handling**: The `trigger-refresh` API now returns a `409 Conflict` status if a refresh is already in progress, and the UI displays a warning toast.
+- **Command Documentation**: Created `COMMANDS.md` listing all Artisan commands available for managing the search engine.
+
+## [2025-12-20 04:58:34] - Automation Fallbacks & Manual Triggers
+
 ### Added
 - **Manual Trigger API**: Created `POST /api/v1/trigger-refresh` (accessible via Master Key or Sanctum) to allow manual initiation of the `MasterRefreshJob`.
 - **UI Refresh Button**: Added a "↻ Refresh Crawler" button to the search dashboard for authorized users.

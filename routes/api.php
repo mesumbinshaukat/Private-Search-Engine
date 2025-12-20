@@ -33,6 +33,13 @@ Route::prefix('v1')->group(function () {
         Route::get('/stats', [StatsController::class, 'show'])->middleware('throttle:60,1');
         
         Route::post('/trigger-refresh', function () {
+            if (\Illuminate\Support\Facades\Cache::has('master_refresh_running')) {
+                return response()->json([
+                    'status' => 'busy',
+                    'message' => 'A master refresh process is already running in the background.'
+                ], 409);
+            }
+
             \Illuminate\Support\Facades\Artisan::call('master:refresh', ['--async' => true]);
             return response()->json(['status' => 'success', 'message' => 'Master refresh triggered in background']);
         });

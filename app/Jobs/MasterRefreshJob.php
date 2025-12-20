@@ -23,32 +23,43 @@ class MasterRefreshJob implements ShouldQueue
 
     public function handle(): void
     {
-        $startTime = now();
-        Log::info('--- Starting Master Refresh Cycle ---');
+        $lock = \Illuminate\Support\Facades\Cache::lock('master_refresh_lock', 3600);
 
-        $commands = [
-            ['name' => 'crawl:daily', 'params' => []],
-            ['name' => 'queue:work', 'params' => ['--stop-when-empty' => true]],
-            ['name' => 'index:generate', 'params' => []],
-            ['name' => 'upload:index', 'params' => []],
-            ['name' => 'cache:refresh', 'params' => []],
-            ['name' => 'queue:status', 'params' => []],
-        ];
-
-        foreach ($commands as $cmd) {
-            try {
-                $this->runCommand($cmd['name'], $cmd['params']);
-            } catch (\Exception $e) {
-                Log::error("MasterRefreshJob encountered an error at step: {$cmd['name']}", [
-                    'error' => $e->getMessage()
-                ]);
-                
-                // We keep going even if a step failed, as requested.
-            }
+        if (!$lock->get()) {
+            Log::warning('Master Refresh Cycle is already running. Skipping this instance.');
+            return;
         }
 
-        $duration = now()->diffInSeconds($startTime);
-        Log::info("--- Master Refresh Cycle Completed in {$duration}s ---");
+        try {
+            \Illuminate\Support\Facades\Cache::put('master_refresh_running', true, 3600);
+            $startTime = now();
+            Log::info('--- Starting Master Refresh Cycle ---');
+
+            $commands = [
+                ['name' => 'crawl:daily', 'params' => []],
+                ['name' => 'queue:work', 'params' => ['--stop-when-empty' => true]],
+                ['name' => 'index:generate', 'params' => []],
+                ['name' => 'upload:index', 'params' => []],
+                ['name' => 'cache:refresh', 'params' => []],
+                ['name' => 'queue:status', 'params' => []],
+            ];
+
+            foreach ($commands as $cmd) {
+                try {
+                    $this->runCommand($cmd['name'], $cmd['params']);
+                } catch (\Exception $e) {
+                    Log::error("MasterRefreshJob encountered an error at step: {$cmd['name']}", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            $duration = now()->diffInSeconds($startTime);
+            Log::info("--- Master Refresh Cycle Completed in {$duration}s ---");
+        } finally {
+            \Illuminate\Support\Facades\Cache::forget('master_refresh_running');
+            $lock->release();
+        }
     }
 
     private function runCommand(string $command, array $params): void
