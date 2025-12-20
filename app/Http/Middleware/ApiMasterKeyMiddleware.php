@@ -15,9 +15,11 @@ class ApiMasterKeyMiddleware
             return $next($request);
         }
 
-        // 2. Check Master Key
+        // 2. Check Master Key (Header X-API-MASTER-KEY, Query, or Bearer)
         $masterKey = env('API_MASTER_KEY');
-        $providedKey = $request->header('X-API-MASTER-KEY') ?: $request->query('api_master_key');
+        $providedKey = $request->header('X-API-MASTER-KEY') 
+            ?: $request->query('api_master_key')
+            ?: $request->bearerToken();
 
         if ($masterKey && $providedKey === $masterKey) {
             return $next($request);

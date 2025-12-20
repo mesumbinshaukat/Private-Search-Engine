@@ -31,6 +31,8 @@ class CrawlDailyCommand extends Command
 
         $totalJobsDispatched = 0;
 
+        $normalizer = app(\App\Services\UrlNormalizerService::class);
+
         foreach ($categories as $cat) {
             $today = now()->format('Y-m-d');
             
@@ -41,7 +43,11 @@ class CrawlDailyCommand extends Command
             $seedUrls = config("categories.categories.{$cat}.seed_urls", []);
             
             foreach ($seedUrls as $url) {
-                $existingJob = CrawlJob::where('url', $url)->where('category', $cat)->first();
+                // Normalize seed URL for consistent deduplication
+                $normalized = $normalizer->normalize($url);
+                $finalUrl = $normalized ? $normalized['normalized'] : $url;
+
+                $existingJob = CrawlJob::where('url', $finalUrl)->where('category', $cat)->first();
 
                 if (!$existingJob || $isFresh) {
                     if ($isFresh && $existingJob) {
@@ -49,7 +55,7 @@ class CrawlDailyCommand extends Command
                     }
 
                     $crawlJob = CrawlJob::create([
-                        'url' => $url,
+                        'url' => $finalUrl,
                         'category' => $cat,
                         'status' => CrawlJob::STATUS_PENDING,
                     ]);
@@ -57,12 +63,7 @@ class CrawlDailyCommand extends Command
                     CrawlPageJob::dispatch($crawlJob);
                     $totalJobsDispatched++;
                 } else {
-                    $this->info("[-] Seed exists: {$url} [{$existingJob->status}]");
-                    
-                    // If it was pending, it might have been lost from the queue (worker crash)
-                    // We don't re-dispatch here to avoid ballooning the queue, 
-                    // as the scheduler/master:refresh will handle the queue work anyway.
-                    // But we could optionally re-dispatch if it's been pending for too long.
+                    $this->info("[-] Seed exists: {$finalUrl} [{$existingJob->status}]");
                 }
             }
         }

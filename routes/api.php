@@ -7,24 +7,7 @@ use App\Http\Controllers\Api\V1\StatsController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
-    Route::post('/login', function (\Illuminate\Http\Request $request) {
-        $credentials = $request->validate([
-            'email' => ['required', 'email'],
-            'password' => ['required'],
-        ]);
-
-        if (!\Illuminate\Support\Facades\Auth::attempt($credentials)) {
-            return response()->json(['message' => 'Invalid credentials'], 401);
-        }
-
-        $user = \Illuminate\Support\Facades\Auth::user();
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'access_token' => $token,
-            'token_type' => 'Bearer',
-        ]);
-    });
+    Route::post('/login', [\App\Http\Controllers\Api\V1\AuthController::class, 'apiLogin']);
 
     Route::middleware('master_key')->group(function () {
         Route::get('/search', [SearchController::class, 'search'])->middleware('throttle:60,1');

@@ -56,19 +56,23 @@ class ParsePageJob implements ShouldQueue
             return;
         }
 
-        // Find or create URL record
-        $urlRecord = Url::where('normalized_url', $parsed['canonical_url'])->first();
-        if (!$urlRecord) {
-            $normalized = $normalizer->normalize($this->crawlJob->url);
-            if (!$normalized) {
-                Log::warning('URL normalization failed', ['url' => $this->crawlJob->url]);
-                return;
-            }
+        // Normalize current URL to get hash
+        $normalizedResult = $normalizer->normalize($this->crawlJob->url);
+        if (!$normalizedResult) {
+            Log::warning('URL normalization failed during parsing', ['url' => $this->crawlJob->url]);
+            return;
+        }
 
+        // Find or create URL record by hash
+        $urlRecord = Url::where('url_hash', $normalizedResult['hash'])->first();
+        
+        if (!$urlRecord) {
             $urlRecord = Url::create([
-                'normalized_url' => $normalized['normalized'],
+                'url_hash' => $normalizedResult['hash'],
+                'normalized_url' => $normalizedResult['normalized'],
                 'original_url' => $this->crawlJob->url,
-                'host' => $normalized['host'],
+                'host' => $normalizedResult['host'],
+                'path' => $normalizedResult['path'],
                 'status' => 'crawled',
                 'category' => $this->crawlJob->category,
                 'last_crawled_at' => now(),
@@ -167,20 +171,25 @@ class ParsePageJob implements ShouldQueue
 
         $links = $parser->extractLinks($html, $this->crawlJob->url);
         $domain = parse_url($this->crawlJob->url, PHP_URL_HOST);
-        $normalizer = app(\App\Services\UrlNormalizer::class);
+        $normalizer = app(UrlNormalizerService::class);
         $allowedExternal = config('crawler.allowed_external_domains', []);
         
         // Smart filtering keywords based on category
         $keywords = ['tech', 'ai', 'sport', 'business', 'news', 'politics', 'science'];
 
         foreach ($links as $link) {
-            $link = $normalizer->normalize($link);
+            $normalizedLink = $normalizer->normalize($link);
+            if (!$normalizedLink) {
+                continue;
+            }
+
+            $linkUrl = $normalizedLink['normalized'];
+            $linkHash = $normalizedLink['hash'];
+            $linkHost = $normalizedLink['host'];
             
             if ($currentCount >= $maxCrawls) {
                 break;
             }
-
-            $linkHost = parse_url($link, PHP_URL_HOST);
 
             // Cross-domain discovery logic
             if ($linkHost !== $domain) {
@@ -191,7 +200,7 @@ class ParsePageJob implements ShouldQueue
                     }
                 } else {
                     // Smart fallback: check if host/path contains category-relevant keywords
-                    $searchable = strtolower($link);
+                    $searchable = strtolower($linkUrl);
                     $hasKeyword = false;
                     foreach ($keywords as $kw) {
                         if (str_contains($searchable, $kw)) {
@@ -206,17 +215,17 @@ class ParsePageJob implements ShouldQueue
             }
 
             // Check if URL has failed before (rate limited, etc)
-            if (Cache::has("failed_url:" . md5($link))) {
+            if (Cache::has("failed_url:" . md5($linkUrl))) {
                 continue;
             }
 
             // Check if already crawled or queued in THIS cycle
-            if (CrawlJob::where('url', $link)->exists()) {
+            if (CrawlJob::where('url', $linkUrl)->exists()) {
                 continue;
             }
 
             $newJob = CrawlJob::create([
-                'url' => $link,
+                'url' => $linkUrl,
                 'category' => $this->crawlJob->category,
                 'status' => CrawlJob::STATUS_PENDING,
             ]);

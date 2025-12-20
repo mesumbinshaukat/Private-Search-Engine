@@ -160,9 +160,10 @@ class MigrateParsedRecordsCommand extends Command
 
             // Index the document
             $this->indexEngine->indexDocument(
-                $url->id,
+                $url,
                 $record->title,
-                $record->description ?? ''
+                $record->description ?? '',
+                $record->description ?? '' // Use description as content for legacy records
             );
         });
     }

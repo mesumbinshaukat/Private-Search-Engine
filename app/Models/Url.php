@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class Url extends Model
 {
     protected $fillable = [
+        'url_hash',
         'normalized_url',
         'original_url',
         'host',
