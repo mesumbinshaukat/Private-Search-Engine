@@ -41,6 +41,7 @@ return [
         'client_secret_json' => env('GOOGLE_DRIVE_CLIENT_SECRET_JSON'),
         'token_json' => env('GOOGLE_DRIVE_TOKEN_JSON'),
         'folder_id' => env('GOOGLE_DRIVE_FOLDER_ID'),
+        'verify_ssl' => env('GOOGLE_DRIVE_VERIFY_SSL', true),
     ],
 
 ];

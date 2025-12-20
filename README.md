@@ -4,7 +4,7 @@
 
 This is a private, category specific search engine designed for personal use. It crawls, indexes, and serves search results for exactly five categories: Technology, Business, AI, Sports, and Politics.
 
-The system operates on a daily refresh cycle, ensuring all indexed data is fresh (maximum 5 days old) and relevant. It is built for local development and testing, with Google Drive serving as the canonical data store.
+The system operates on a daily refresh cycle, ensuring all indexed data is fresh (maximum 30 days old) and relevant. It is built for local development and testing, with Google Drive serving as the canonical data store.
 
 ## Architecture Overview
 
@@ -74,7 +74,7 @@ This can be triggered manually via `php artisan master:refresh` or automatically
 3. **Index Phase** (03:00 - 04:00)
    - Fetch existing records from Google Drive
    - Merge with new local records and deduplicate
-   - Enforce 5-day age limit (records > 5 days are purged)
+   - Enforce 30-day age limit (records > 30 days are purged)
    - Generate timestamped JSON files if an index for today already exists
 
 4. **Cleanup Phase** (04:00 - 04:30)
@@ -96,9 +96,9 @@ This can be triggered manually via `php artisan master:refresh` or automatically
 
 ### Data Retention
 
-- Maximum data age: 5 days
+- Maximum data age: 30 days
 - Minimum records per category: 5 (configurable)
-- Index files older than 5 days are automatically purged
+- Index files older than 30 days are automatically purged
 - Google Drive is the source of truth
 
 ## Category Rules
@@ -170,7 +170,7 @@ Do not use this system if you need:
 - Production grade reliability and monitoring
 - Multi user access with authentication
 - Categories beyond the five defined categories
-- Data retention beyond 5 days
+- Data retention beyond 30 days
 - Guaranteed minimum record counts (system may fail to meet 1000 record threshold)
 
 ## Authentication
@@ -188,6 +188,12 @@ This system supports two authentication methods for Google Drive:
 2. Save credentials to `storage/app/credentials/client_secret.json`.
 3. Run `php artisan google-drive:authorize` to log in via browser.
 4. Configure `GOOGLE_DRIVE_CLIENT_SECRET_JSON` and `GOOGLE_DRIVE_TOKEN_JSON` in `.env`.
+
+### SSL Verification issues
+If you are developing locally and encounter SSL certificate errors (e.g., cURL error 60), add this to your `.env`:
+```bash
+GOOGLE_DRIVE_VERIFY_SSL=false
+```
 
 ## Quick Start Commands
 

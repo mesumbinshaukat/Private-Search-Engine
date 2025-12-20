@@ -30,9 +30,15 @@ class SearchController extends Controller
         $debug = $request->boolean('debug', false);
         $forceFuzzy = $request->boolean('fuzzy', false);
 
-        // Auto-refresh check (1 hour)
-        if ($this->getCacheAge() > 3600) {
-            \Illuminate\Support\Facades\Artisan::call('cache:refresh');
+        // Auto-refresh trigger (1 hour age)
+        if ($this->getCacheAge($category) > 3600) {
+            $lockKey = "refreshing_cache_" . $category;
+            // Only trigger if not already triggered in last 5 minutes
+            if (!\Illuminate\Support\Facades\Cache::has($lockKey)) {
+                \Illuminate\Support\Facades\Cache::put($lockKey, true, 300);
+                \Illuminate\Support\Facades\Log::info("Triggering auto-refresh for {$category}");
+                \Illuminate\Support\Facades\Artisan::call('cache:refresh');
+            }
         }
 
         // Cache Search Results (10 min)

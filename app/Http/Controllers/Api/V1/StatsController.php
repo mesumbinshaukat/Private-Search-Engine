@@ -6,16 +6,38 @@ use App\Http\Controllers\Controller;
 use App\Models\CrawlJob;
 use App\Models\IndexMetadata;
 use App\Models\ParsedRecord;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Carbon;
 
 class StatsController extends Controller
 {
     public function show()
     {
-        $latestIndex = IndexMetadata::latest('created_at')->first();
+        $totalRecords = 0;
+        $categories = config('categories.valid_categories', ['technology', 'business', 'ai', 'sports', 'politics']);
+        $lastUpdate = null;
+
+        foreach ($categories as $category) {
+            $cacheFile = "cache/{$category}.json";
+            if (Storage::exists($cacheFile)) {
+                $content = Storage::get($cacheFile);
+                $data = json_decode($content, true);
+                if ($data && isset($data['meta']['record_count'])) {
+                    $totalRecords += $data['meta']['record_count'];
+                } elseif ($data && isset($data['records'])) {
+                    $totalRecords += count($data['records']);
+                }
+
+                $mtime = Storage::lastModified($cacheFile);
+                if ($lastUpdate === null || $mtime > $lastUpdate) {
+                    $lastUpdate = $mtime;
+                }
+            }
+        }
 
         $indexStats = [
-            'total_records' => ParsedRecord::count(),
-            'last_generated' => $latestIndex?->created_at->toIso8601String(),
+            'total_records' => $totalRecords,
+            'last_generated' => $lastUpdate ? Carbon::createFromTimestamp($lastUpdate)->toIso8601String() : null,
             'oldest_record' => ParsedRecord::oldest('parsed_at')->value('parsed_at')?->toIso8601String(),
             'newest_record' => ParsedRecord::latest('parsed_at')->value('parsed_at')?->toIso8601String(),
         ];

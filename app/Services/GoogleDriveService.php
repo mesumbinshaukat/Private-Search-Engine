@@ -54,6 +54,13 @@ class GoogleDriveService
         $client->addScope(Drive::DRIVE_FILE);
         $client->addScope(Drive::DRIVE);
         
+        // Handle SSL verification (useful for local dev)
+        $verifySsl = config('services.google_drive.verify_ssl', true);
+        if (!$verifySsl) {
+            $guzzleClient = new \GuzzleHttp\Client(['verify' => false]);
+            $client->setHttpClient($guzzleClient);
+        }
+
         $this->driveService = new Drive($client);
         Log::info('Google Drive client initialized with Service Account');
     }
@@ -74,6 +81,13 @@ class GoogleDriveService
         $client->addScope(Drive::DRIVE);
         $client->setAccessType('offline');
         $client->setPrompt('select_account consent');
+
+        // Handle SSL verification (useful for local dev)
+        $verifySsl = config('services.google_drive.verify_ssl', true);
+        if (!$verifySsl) {
+            $guzzleClient = new \GuzzleHttp\Client(['verify' => false]);
+            $client->setHttpClient($guzzleClient);
+        }
 
         if (file_exists($tokenFullPath)) {
             $accessToken = json_decode(file_get_contents($tokenFullPath), true);

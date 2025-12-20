@@ -103,7 +103,9 @@ Uploads the generated JSON index to Google Drive.
 
 ### `php artisan cache:refresh`
 Downloads and merges all indexes from Google Drive into local cache.
-- **Note**: Legacy system for backward compatibility
+- Purpose: Merges historical data from multiple JSON files on Drive into a single category-specific local cache.
+- **New Feature**: Now deduplicates by URL and Hash, keeping newest records first.
+- **Auto-Refresh**: Automatically triggered by the search API if local cache is >1 hour old.
 
 ### `php artisan index:wipe`
 Utility command to truncate all `ParsedRecord` and `CrawlJob` data.
@@ -191,18 +193,6 @@ php artisan crawl:daily --fresh
 Example: `php artisan queue:work database --stop-when-empty --tries=3`
 
 ---
-
-## Indexing & Management
-
-### `php artisan index:generate`
-Generates the searchable JSON index file from `ParsedRecord` data.
-- Purpose: Prepares data for fast frontend consumption and S3 upload.
-
-### `php artisan upload:index`
-Uploads the generated JSON index to the configured S3 compatible storage.
-
-### `php artisan cache:refresh`
-Triggers the frontend to bust its cache and fetch the latest uploaded index.
 
 ### `php artisan index:wipe`
 Utility command to truncate all `ParsedRecord` and `CrawlJob` data.

@@ -29,73 +29,90 @@ class RefreshCacheCommand extends Command
                 continue;
             }
 
+            // Sort files by name DESC to process newest first (heuristic)
+            usort($files, fn($a, $b) => strcmp($b->name, $a->name));
+
             $allRecords = [];
-            // Enforce 30-day age limit for merged historical cache
             $maxAgeDays = config('indexer.max_data_age_days', 30);
             $cutoffDate = now()->subDays($maxAgeDays);
 
-            // Sort files by name DESC to process newer ones first (often timestamped)
-            usort($files, fn($a, $b) => strcmp($b->name, $a->name));
-
             foreach ($files as $file) {
-                $this->info("  Downloading {$file->name}...");
-                $tempPath = "temp/" . $file->name;
-                
-                if ($storage->downloadIndex($file->id, $tempPath)) {
-                    $content = Storage::get($tempPath);
-                    $data = json_decode($content, true);
-                    
-                    if ($data && isset($data['records'])) {
-                        foreach ($data['records'] as $record) {
-                            $indexedAt = isset($record['indexed_at']) ? \Illuminate\Support\Carbon::parse($record['indexed_at']) : null;
+                try {
+                    $tempPath = "temp/cache_refresh_{$file->id}.json";
+                    if ($storage->downloadIndex($file->id, $tempPath)) {
+                        $content = Storage::get($tempPath);
+                        $data = json_decode($content, true);
+                        
+                        if ($data && isset($data['records'])) {
+                            $fileCount = count($data['records']);
+                            $keptCount = 0;
                             
-                            // 2. Filter by Age (30 days)
-                            if ($indexedAt && $indexedAt->greaterThanOrEqualTo($cutoffDate)) {
-                                $url = $record['url'] ?? null;
-                                $hash = $record['url_hash'] ?? $record['content_hash'] ?? null;
+                            foreach ($data['records'] as $record) {
+                                // Enforce age limit (default 30 days)
+                                $indexedAtStr = $record['indexed_at'] ?? $record['published_at'] ?? null;
+                                $indexedAt = $indexedAtStr ? \Illuminate\Support\Carbon::parse($indexedAtStr) : null;
                                 
-                                if (!$url) continue;
-
-                                // 3. Deduplicate by URL or Hash (Keep newest)
-                                // Since we sorted files DESC, if we already have this URL/Hash, it's newer (usually)
-                                // or we check the specific indexed_at if available
-                                $existing = $allRecords[$url] ?? null;
-                                
-                                if (!$existing || ($indexedAt && \Illuminate\Support\Carbon::parse($existing['indexed_at'])->lt($indexedAt))) {
-                                    $allRecords[$url] = $record;
+                                // If indexedAt is null, treat it as older than cutoffDate (i.e., don't keep it unless it's explicitly newer)
+                                if (!$indexedAt || $indexedAt->greaterThanOrEqualTo($cutoffDate)) {
+                                    $url = $record['url'] ?? null;
+                                    if (!$url) {
+                                        // Skip records without a URL, as it's essential for deduplication and access
+                                        continue;
+                                    }
+                                    $hash = $record['content_hash'] ?? md5($url . ($record['description'] ?? ''));
+                                    
+                                    // Deduplicate: Keep if not seen, or if this one is newer
+                                    // We use URL as the primary key for deduplication
+                                    $existing = $allRecords[$url] ?? null;
+                                    
+                                    if (!$existing || ($indexedAt && isset($existing['indexed_at']) && $indexedAt->gt(\Illuminate\Support\Carbon::parse($existing['indexed_at'])))) {
+                                        $allRecords[$url] = $record;
+                                        $keptCount++;
+                                    }
                                 }
                             }
+                            $this->info("  - Processed {$file->name}: {$keptCount}/{$fileCount} records kept.");
+                        } else {
+                            $this->warn("  - Processed {$file->name}: No records found or invalid JSON.");
                         }
+                        Storage::delete($tempPath);
+                    } else {
+                        $this->error("  - Failed to download {$file->name}");
                     }
-                    Storage::delete($tempPath);
-                } else {
-                    $this->error("  ✗ Failed to download {$file->name}");
+                } catch (\Exception $e) {
+                    $this->error("  - Error processing {$file->name}: " . $e->getMessage());
+                    // Ensure temp file is cleaned up even on error
+                    if (Storage::exists($tempPath)) {
+                        Storage::delete($tempPath);
+                    }
                 }
             }
 
-            if (!empty($allRecords)) {
-                // 4. Final Sorting by indexed_at DESC
-                $records = array_values($allRecords);
-                usort($records, function($a, $b) {
-                    $dateA = isset($a['indexed_at']) ? strtotime($a['indexed_at']) : 0;
-                    $dateB = isset($b['indexed_at']) ? strtotime($b['indexed_at']) : 0;
-                    return $dateB <=> $dateA;
-                });
+            // The $allRecords array already contains unique records by URL due to the deduplication logic inside the loop.
+            // We just need to convert it to a simple array for final processing.
+            $finalRecords = array_values($allRecords);
 
-                $cacheFile = "cache/{$category}.json";
-                $mergedData = [
-                    'meta' => [
-                        'category' => $category,
-                        'generated_at' => now()->toIso8601String(),
-                        'record_count' => count($records),
-                        'schema_version' => config('indexer.schema_version', '1.0'),
-                    ],
-                    'records' => $records,
-                ];
+            // Sort finally by indexed_at DESC
+            usort($finalRecords, function($a, $b) {
+                // Fallback to 0 if indexed_at is missing, effectively pushing them to the end
+                $dateA = isset($a['indexed_at']) ? \Illuminate\Support\Carbon::parse($a['indexed_at'])->timestamp : 0;
+                $dateB = isset($b['indexed_at']) ? \Illuminate\Support\Carbon::parse($b['indexed_at'])->timestamp : 0;
+                return $dateB <=> $dateA;
+            });
 
-                Storage::put($cacheFile, json_encode($mergedData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-                $this->info("✓ {$category} cache updated with " . count($records) . " records");
-            }
+            $cacheFile = "cache/{$category}.json";
+            $mergedData = [
+                'meta' => [
+                    'category' => $category,
+                    'generated_at' => now()->toIso8601String(),
+                    'record_count' => count($finalRecords),
+                    'schema_version' => config('indexer.schema_version', '1.0'),
+                ],
+                'records' => $finalRecords,
+            ];
+
+            Storage::put($cacheFile, json_encode($mergedData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            $this->info("✓ {$category} cache updated with " . count($finalRecords) . " records");
         }
 
         $this->info('Cache refresh complete');
