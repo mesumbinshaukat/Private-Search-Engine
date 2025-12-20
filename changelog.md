@@ -11,6 +11,9 @@
 - **Refactored Auth**: Moved API login logic from a route closure in `api.php` to a dedicated `AuthController@apiLogin` for better maintainability and testability.
 - **Model Fillable**: Verified and ensured `url_hash` is present in `Url` model `$fillable` array.
 
+### Added
+- **Verification Script**: Added `scripts/verify_wiring.php` to perform a comprehensive check of system wiring, including model fillable attributes, service signatures, and job dependencies.
+
 ---
 
 ## [2025-12-20 09:22:00] - URL Normalization Robustness Fix
