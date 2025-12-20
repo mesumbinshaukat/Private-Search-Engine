@@ -2,20 +2,21 @@
 
 namespace App\Services;
 
-use App\Models\CrawlJob;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use App\Services\RobotsTxtService;
+use App\Services\RateLimiter;
 
 class CrawlerService
 {
-    private RobotsTxtParser $robotsTxtParser;
     private RateLimiter $rateLimiter;
+    private RobotsTxtService $robotsTxtService;
 
-    public function __construct(RobotsTxtParser $robotsTxtParser, RateLimiter $rateLimiter)
+    public function __construct(RateLimiter $rateLimiter, RobotsTxtService $robotsTxtService)
     {
-        $this->robotsTxtParser = $robotsTxtParser;
         $this->rateLimiter = $rateLimiter;
+        $this->robotsTxtService = $robotsTxtService;
     }
 
     public function crawl(string $url, string $category): array
@@ -29,12 +30,19 @@ class CrawlerService
             ];
         }
 
-        if (config('crawler.respect_robots_txt', true) && !$this->robotsTxtParser->isAllowed($url)) {
+        if (config('crawler.respect_robots_txt', true) && !$this->robotsTxtService->isAllowed($url)) {
             return [
                 'success' => false,
                 'error' => 'Disallowed by robots.txt',
                 'robots_txt_allowed' => false,
             ];
+        }
+
+        // Get crawl delay from robots.txt
+        $host = parse_url($url, PHP_URL_HOST);
+        $crawlDelay = $this->robotsTxtService->getCrawlDelay($host);
+        if ($crawlDelay) {
+            sleep((int) ceil($crawlDelay));
         }
 
         $this->rateLimiter->wait($domain);
