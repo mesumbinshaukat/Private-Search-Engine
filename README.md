@@ -118,7 +118,7 @@ Each category must maintain a minimum record count (default: 5). If this thresho
 ### Authentication
 The system is secured using two primary methods:
 1. **Laravel Sanctum**: Used for the Search UI. Users must log in via a secure modal. Tokens are managed via session-based cookies or local storage.
-2. **Master API Key**: Used for cross-service authentication. Accessible via `X-API-MASTER-KEY` header or `api_master_key` query parameter.
+2. **Master API Key**: Used for cross-service authentication. Accessible via `X-API-MASTER-KEY` header, `Authorization: Bearer` token, or `api_master_key` query parameter.
 
 ### Rate Limiting
 - Crawling: Maximum 1 request per second per domain

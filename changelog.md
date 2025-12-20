@@ -10,6 +10,9 @@
 ### Changed
 - **Refactored Auth**: Moved API login logic from a route closure in `api.php` to a dedicated `AuthController@apiLogin` for better maintainability and testability.
 - **Model Fillable**: Verified and ensured `url_hash` is present in `Url` model `$fillable` array.
+- **Config-Safe Auth**: Moved `API_MASTER_KEY` to `config/app.php` and updated middleware to use `config()` instead of `env()`, ensuring authentication works even when configuration is cached.
+- **API Guard**: Added missing `api` guard to `config/auth.php` for standard Sanctum integration.
+- **Environment Restoration**: Restored missing `.env` from `.env.production` to ensure system-wide availability of environment variables.
 
 ### Added
 - **Verification Script**: Added `scripts/verify_wiring.php` to perform a comprehensive check of system wiring, including model fillable attributes, service signatures, and job dependencies.
