@@ -4,7 +4,10 @@ namespace App\Jobs;
 
 use App\Models\CrawlJob;
 use App\Models\ParsedRecord;
+use App\Models\Url;
 use App\Services\ParserService;
+use App\Services\UrlNormalizerService;
+use App\Services\IndexEngineService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -30,8 +33,11 @@ class ParsePageJob implements ShouldQueue
         $this->filename = $filename;
     }
 
-    public function handle(ParserService $parser): void
-    {
+    public function handle(
+        ParserService $parser,
+        UrlNormalizerService $normalizer,
+        IndexEngineService $indexer
+    ): void {
         Log::info('Starting parse', [
             'url' => $this->crawlJob->url,
             'filename' => $this->filename,
@@ -48,6 +54,46 @@ class ParsePageJob implements ShouldQueue
         if (!$parsed) {
             Log::warning('Parse failed', ['url' => $this->crawlJob->url]);
             return;
+        }
+
+        // Find or create URL record
+        $urlRecord = Url::where('normalized_url', $parsed['canonical_url'])->first();
+        if (!$urlRecord) {
+            $normalized = $normalizer->normalize($this->crawlJob->url);
+            if (!$normalized) {
+                Log::warning('URL normalization failed', ['url' => $this->crawlJob->url]);
+                return;
+            }
+
+            $urlRecord = Url::create([
+                'normalized_url' => $normalized['normalized'],
+                'original_url' => $this->crawlJob->url,
+                'host' => $normalized['host'],
+                'status' => 'crawled',
+                'category' => $this->crawlJob->category,
+                'last_crawled_at' => now(),
+            ]);
+        } else {
+            $urlRecord->update([
+                'status' => 'crawled',
+                'last_crawled_at' => now(),
+            ]);
+        }
+
+        // Index the document
+        try {
+            $indexer->indexDocument(
+                $urlRecord,
+                $parsed['title'],
+                $parsed['description'],
+                $html // Full HTML for content extraction
+            );
+            Log::info('Document indexed', ['url_id' => $urlRecord->id]);
+        } catch (\Exception $e) {
+            Log::error('Indexing failed', [
+                'url_id' => $urlRecord->id,
+                'error' => $e->getMessage(),
+            ]);
         }
 
         // Check for existing record by canonical URL (global check)
