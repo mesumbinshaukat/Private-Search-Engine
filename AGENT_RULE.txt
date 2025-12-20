@@ -1,0 +1,42 @@
+# PROJECT: PRIVATE SEARCH ENGINE - AI AGENT RULES
+
+This document serves as the primary context for any AI agent interacting with this codebase. Follow these rules strictly to maintain system reliability, especially for shared hosting constraints.
+
+## 1. PROJECT PHILOSOPHY
+- **Shared Hosting First**: The application is optimized for Hostinger/hPanel. Avoid long-running synchronous processes that exceed LVE limits.
+- **Automation via Scheduler**: We use the Laravel Scheduler (`schedule:run`) as the heartbeat. Do NOT suggest perpetual queue workers (Supervisor) unless explicitly asked.
+- **SQLite Concurrency**: We use SQLite with WAL mode. All database interactions must be concurrency-aware.
+
+## 2. CORE ARCHITECTURE & FLOWS
+### A. The Master Refresh Cycle
+- **Trigger**: `php artisan master:refresh --async` or `MasterRefreshJob`.
+- **Flow**: `crawl:daily` -> `queue:work` (chunked) -> `index:generate` -> `upload:index` -> `cache:refresh`.
+- **Locking**: `master_refresh_lock` (Cache) prevents concurrent runs.
+
+### B. The Poor Man's Cron
+- **Fallback**: If no system cron exists, `AppServiceProvider::boot` triggers `schedule:run` on web hits (throttled to 1min).
+
+### C. Crawler Logic
+- **Discovery**: Cross-domain enabled. Filters via `CRAWLER_ALLOWED_EXTERNAL_DOMAINS` or keyword fallback.
+- **Freshness**: 30-day rule. Records older than 30 days are purged and recreated.
+- **Duplication**: Global check via `canonical_url`, fallback to raw `url`.
+
+## 3. CODING STANDARDS for AGENTS
+- **Logging**: Always log significant starts, successes, and failures using `Log::info` and `Log::error`.
+- **Sanctum + Master Key**: API routes should favor the `master_key` middleware to allow both Bearer tokens and `X-API-MASTER-KEY` headers.
+- **UI Aesthetics**: Maintain the modern, glassmorphism dark-theme. Use `showToast(message, type)` for all non-intrusive feedback.
+- **Environment Consistency**: Add all new configuration keys to `.env.example` and documented in `README.md`.
+
+## 4. CRITICAL FILES TO REFERENCE
+- `COMMANDS.md`: List of terminal commands.
+- `cron.md`: Server-side automation guidance.
+- `changelog.md`: History of architectural shifts.
+- `config/crawler.php`: Crawler limits and filter rules.
+
+## 5. RESTRICIONS
+- **No Heavy Synchronous API**: Always use `--async` for heavy artisan calls via web to avoid 504 timeouts.
+- **No Direct S3 Mutations**: Index uploads must go through `upload:index` to maintain tracking.
+- **No Database Wiping**: Use `--fresh` flag in `master:refresh` rather than manual `truncate` to preserve referential integrity where applicable.
+
+---
+*Last Updated: 2025-12-20*

@@ -1,3 +1,8 @@
+## [2025-12-20 05:40:34] - AI Agent Meta-Governance
+
+### Added
+- **AI Rule File**: Created `AGENT_RULE.txt` to provide future AI agents with a comprehensive understanding of the project's architecture, constraints (shared hosting), and development flow.
+
 ## [2025-12-20 05:15:34] - Concurrency Safety & Command Documentation
 
 ### Added
