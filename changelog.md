@@ -1,3 +1,41 @@
+## [2025-12-20 09:22:00] - URL Normalization Robustness Fix
+
+### Fixed
+- **NOT NULL Constraint Violation**: Fixed critical bug where `url_hash` column in `urls` table received NULL values, causing database constraint violations and job failures
+- **Parse URL Failures**: Enhanced `UrlNormalizerService::normalize()` to explicitly handle `parse_url()` returning `false` for malformed URLs
+- **Missing Validation**: Added defensive validation guards in `CrawlPageJob::handle()` to check normalization results before database insertion
+- **Database Error Handling**: Wrapped `Url::firstOrCreate()` in try-catch blocks to gracefully handle database constraint violations
+
+### Changed
+- **Auto-Scheme Addition**: URLs without scheme (e.g., "example.com") now automatically get `https://` prepended if they match domain pattern
+- **Enhanced Logging**: Added detailed logging for different normalization failure scenarios (empty URL, malformed URL, missing scheme/host, unsupported scheme, empty host)
+- **Graceful Degradation**: Failed normalizations now mark jobs as failed with descriptive reasons instead of crashing the queue worker
+- **Failed URL Caching**: URLs that fail normalization are cached for 24 hours to prevent infinite retry loops
+- **IDN Handling**: Improved Unicode/Internationalized Domain Name conversion with explicit fallback handling
+
+### Added
+- **Comprehensive Test Suite**: Created `UrlNormalizerServiceTest.php` with 30+ test cases covering:
+  - Empty and whitespace-only URLs
+  - Malformed URLs (no host, scheme-only, invalid syntax)
+  - Scheme auto-addition for domains
+  - Fragment removal (client-side only)
+  - Tracking parameter removal (utm_*, fbclid, gclid, etc.)
+  - Default port removal (80 for HTTP, 443 for HTTPS)
+  - Query parameter sorting for consistent hashing
+  - Path normalization with relative segment resolution
+  - Hash consistency verification
+  - Real-world URL handling (entrepreneur.com, etc.)
+- **Troubleshooting Guide**: Added URL normalization error troubleshooting section to `COMMANDS.md`
+
+### Technical Details
+- **Branch**: `advanced-crawler-engine`
+- **Files Modified**: 
+  - `app/Services/UrlNormalizerService.php` (enhanced validation and error handling)
+  - `app/Jobs/CrawlPageJob.php` (added validation guards and try-catch blocks)
+- **Files Added**:
+  - `tests/Unit/UrlNormalizerServiceTest.php` (comprehensive test coverage)
+- **Impact**: Prevents crawler failures on edge-case URLs, improves system stability
+
 ## [2025-12-20 06:27:18] - Advanced Crawler Engine Foundation (In Progress)
 
 ### Added

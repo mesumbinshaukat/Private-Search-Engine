@@ -26,9 +26,69 @@ class CrawlPageJob implements ShouldQueue
         $this->crawlJob = $crawlJob;
     }
 
-    public function handle(CrawlerService $crawler): void
+    public function handle(CrawlerService $crawler, UrlNormalizerService $normalizer): void
     {
         $this->crawlJob->update(['status' => CrawlJob::STATUS_PROCESSING]);
+
+        // Track URL in urls table
+        $normalized = $normalizer->normalize($this->crawlJob->url);
+        
+        // Validate normalization result
+        if (!$normalized || empty($normalized['hash'])) {
+            $reason = 'URL normalization failed - invalid or malformed URL';
+            
+            $this->crawlJob->update([
+                'status' => CrawlJob::STATUS_FAILED,
+                'failed_reason' => $reason,
+            ]);
+            
+            // Cache this URL as failed to prevent re-queuing
+            \Illuminate\Support\Facades\Cache::put("failed_url:" . md5($this->crawlJob->url), true, now()->addDay());
+            
+            Log::warning('Crawl job failed due to normalization error', [
+                'url' => $this->crawlJob->url,
+                'category' => $this->crawlJob->category,
+                'reason' => $reason,
+            ]);
+            
+            return; // Exit early without attempting database insertion
+        }
+
+        // Attempt to create/retrieve URL record with try-catch for database errors
+        try {
+            $urlRecord = Url::firstOrCreate(
+                ['url_hash' => $normalized['hash']],
+                [
+                    'url_hash' => $normalized['hash'],
+                    'original_url' => $this->crawlJob->url,
+                    'normalized_url' => $normalized['normalized'],
+                    'host' => $normalized['host'],
+                    'path' => $normalized['path'],
+                    'category' => $this->crawlJob->category,
+                    'depth' => 0,
+                    'priority' => 50,
+                    'status' => 'pending',
+                ]
+            );
+            
+            // Update status to indicate crawling started
+            $urlRecord->update(['status' => 'pending']);
+        } catch (\Exception $e) {
+            $reason = 'Database error during URL creation: ' . $e->getMessage();
+            
+            $this->crawlJob->update([
+                'status' => CrawlJob::STATUS_FAILED,
+                'failed_reason' => $reason,
+            ]);
+            
+            Log::error('Failed to create URL record', [
+                'url' => $this->crawlJob->url,
+                'error' => $e->getMessage(),
+                'normalized' => $normalized,
+            ]);
+            
+            return; // Exit early
+        }
 
         Log::info('Starting crawl', [
             'url' => $this->crawlJob->url,

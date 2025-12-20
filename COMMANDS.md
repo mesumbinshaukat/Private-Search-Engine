@@ -10,6 +10,50 @@ Runs the entire search engine cycle (crawl, process, index, upload, cache).
 - `--fresh`: Wipes the existing `ParsedRecord` and `CrawlJob` tables before starting. Use this to rebuild the index from scratch.
 Example: `php artisan master:refresh --async --fresh`
 
+### Reset Crawler State
+```bash
+php artisan migrate:fresh
+php artisan crawl:daily --fresh
+```
+
+### URL Normalization Errors
+If you encounter "NOT NULL constraint violation" errors on `url_hash`:
+
+**1. Check logs for normalization failures:**
+```bash
+# Windows PowerShell
+Get-Content storage/logs/laravel.log -Tail 100 | Select-String "normalization failed"
+
+# Linux/Mac
+tail -f storage/logs/laravel.log | grep "normalization failed"
+```
+
+**2. Identify problematic URLs in failed jobs:**
+```bash
+php artisan tinker
+>>> \App\Models\CrawlJob::where('status', 'failed')->where('failed_reason', 'like', '%normalization%')->get(['url', 'failed_reason'])
+```
+
+**3. Clear cached failed URLs (if you've fixed the source):**
+```bash
+php artisan cache:clear
+```
+
+**4. Manually test URL normalization:**
+```bash
+php artisan tinker
+>>> $normalizer = app(\App\Services\UrlNormalizerService::class);
+>>> $normalizer->normalize('https://example.com');  // Should return array
+>>> $normalizer->normalize('');  // Should return null
+>>> $normalizer->normalize('://bad');  // Should return null
+```
+
+**5. Common causes:**
+- Empty or whitespace-only URLs in seed data
+- Malformed URLs without proper scheme (use https://)
+- Relative URLs without base context
+- URLs with unsupported schemes (ftp://, file://, etc.)
+
 ---
 
 ## Crawling & Processing
