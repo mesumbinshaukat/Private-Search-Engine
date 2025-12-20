@@ -86,13 +86,16 @@ class IndexerService
 
         Storage::put($filename, $jsonString);
 
-        $metadata = IndexMetadata::create([
-            'category' => $category,
-            'date' => $date,
-            'record_count' => count($mergedRecords),
-            'file_path' => $filename,
-            'checksum' => $checksum,
-        ]);
+        $metadata = IndexMetadata::updateOrCreate(
+            ['category' => $category, 'date' => $date],
+            [
+                'record_count' => count($mergedRecords),
+                'file_path' => $filename,
+                'checksum' => $checksum,
+                'google_drive_file_id' => null,
+                'uploaded_at' => null,
+            ]
+        );
 
         Log::info('Index generated', [
             'category' => $category,

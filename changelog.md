@@ -18,6 +18,7 @@
 - **Cache Merging**: Enhanced `RefreshCacheCommand` with robust deduplication (URL/Hash) and detailed per-file logging to ensure all Drive records are correctly ingested.
 - **Refresh Control**: Implemented a 5-minute backoff for auto-refresh triggers to prevent redundant background work.
 - **Enhanced Cache Refresh**: Updated `RefreshCacheCommand` to discover all category-prefixed JSON files on Google Drive, merge them with newest-record-first deduplication (by URL/Hash), and enforce a 30-day data retention limit.
+- **Index Generation Stability**: Fixed `SQLSTATE[23000]` unique constraint violation in `IndexerService` by using `updateOrCreate` for daily index metadata entries. This allows the index generation command to be run multiple times per day without error.
 - **Search Optimization**: Instrumented `SearchController` with automatic 1-hour cache refresh triggers and 10-minute search result caching using Laravel's Cache facade.
 - **Environment Restoration**: Restored missing `.env` from `.env.production` to ensure system-wide availability of environment variables.
 
