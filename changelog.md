@@ -1,3 +1,73 @@
+## [2025-12-20 06:27:18] - Advanced Crawler Engine Foundation (In Progress)
+
+### Added
+- **Database Schema**: Implemented 8 new tables for advanced crawling and indexing:
+  - `urls` table: Normalized URL storage with depth, priority, scheduling, and status tracking. Supports global deduplication via SHA256 hash.
+  - `hosts` table: Robots.txt cache with crawl delays and allow/disallow rules stored as JSON. 24-hour cache expiry.
+  - `crawl_queue` table: Worker coordination with locking mechanism for concurrent fetching.
+  - `documents` table: Full-text content storage with metadata, language detection, and word count.
+  - `links` table: Link graph structure with nofollow tracking and anchor text.
+  - `tokens` table: Inverted index vocabulary with document frequency tracking.
+  - `postings` table: Term frequencies and positions for TF-IDF/BM25 scoring.
+  - `metrics` table: Crawl health monitoring and time-series data.
+
+- **Eloquent Models**: Created 8 models with comprehensive relationships and utility methods:
+  - `Url` model: Relationships to documents, links, crawl_queue. Scopes for pending/crawled/failed URLs.
+  - `Host` model: Cache expiry checking, crawl delay retrieval methods.
+  - `CrawlQueue` model: Lock/unlock methods for worker coordination.
+  - `Document` model: Relationships to URLs and postings, document length calculation.
+  - `Link` model: Bidirectional URL relationships, follow/nofollow scopes.
+  - `Token` model: IDF calculation method for search scoring.
+  - `Posting` model: TF-IDF and BM25 scoring methods with configurable parameters.
+  - `Metric` model: Time-series query scopes for monitoring.
+
+- **URL Normalization Service**: Comprehensive URL normalization with:
+  - Lowercase scheme and host normalization
+  - Default port removal (80 for HTTP, 443 for HTTPS)
+  - Path normalization with relative segment resolution (., ..)
+  - Query parameter alphabetical sorting
+  - Tracking parameter removal (utm_*, fbclid, gclid, msclkid, etc.)
+  - Unicode/IDN punycode conversion
+  - SHA256 hash generation for global uniqueness checking
+  - Relative URL to absolute URL resolution
+  - URL equivalence checking
+
+- **Robots.txt Service**: Pure PHP robots.txt parser and compliance checker:
+  - Automatic robots.txt fetching per host
+  - User-agent matching logic (supports wildcards)
+  - Allow/disallow rule parsing with pattern matching (* and $ wildcards)
+  - Crawl-delay directive extraction and caching
+  - 24-hour cache in `hosts` table
+  - Graceful handling of missing or invalid robots.txt files
+
+- **Enhanced Crawler Configuration**: Updated `config/crawler.php` with:
+  - Fetch engine settings (`fetch_workers`, `fetch_batch_size`)
+  - Separate connect and request timeouts
+  - Maximum crawl depth configuration
+  - User agent rotation array for anti-blocking
+  - Increased default max crawls per category to 1000
+
+### Changed
+- **ParserService**: Updated to use new `UrlNormalizerService` with array return format. Now returns `url_hash` for deduplication. Removed duplicate `makeAbsolute()` method.
+- **Crawler Configuration**: Reorganized into logical sections with comments. Increased default limits for production-scale crawling.
+
+### Removed
+- **Old UrlNormalizer**: Replaced basic `UrlNormalizer.php` with comprehensive `UrlNormalizerService.php`.
+
+### Technical Details
+- **Branch**: `advanced-crawler-engine` (3 commits, 1,270 lines added)
+- **Migration Status**: All 8 migrations tested and ran successfully in 71ms
+- **Database Engine**: SQLite with WAL mode (already enabled)
+- **Backward Compatibility**: Preserved. Google Drive remains as optional backup.
+
+### In Progress
+- Advanced fetch engine with curl_multi for concurrent fetching (100+ URLs)
+- Inverted index engine for database-backed search
+- Crawl scheduler with priority-based queuing
+- Enhanced parsing with OG/Schema.org extraction
+- Monitoring and metrics collection
+- Integration with existing CrawlerService and jobs
+
 ## [2025-12-20 05:40:34] - AI Agent Meta-Governance
 
 ### Added
