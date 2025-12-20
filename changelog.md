@@ -62,11 +62,35 @@
 
 ### In Progress
 - Advanced fetch engine with curl_multi for concurrent fetching (100+ URLs)
-- Inverted index engine for database-backed search
-- Crawl scheduler with priority-based queuing
+- Inverted index engine for database-backed search ✅ COMPLETED
+- Crawl scheduler with priority-based queuing ✅ COMPLETED
 - Enhanced parsing with OG/Schema.org extraction
-- Monitoring and metrics collection
-- Integration with existing CrawlerService and jobs
+- Monitoring and metrics collection ✅ COMPLETED
+- Integration with existing CrawlerService and jobs ✅ PARTIALLY COMPLETED
+
+### Recently Added (2025-12-20 06:35:00)
+- **CrawlSchedulerService**: Intelligent URL scheduling with:
+  - Priority calculation based on depth, inbound links, and freshness
+  - Next crawl time calculation with adaptive intervals
+  - Bulk reprioritization of all URLs
+  - Stale queue cleanup (removes locks older than 1 hour)
+
+- **ScheduleCrawlCommand**: Artisan command for running scheduler:
+  - `php artisan crawler:schedule` - Schedule URLs for crawling
+  - `--reprioritize` flag to recalculate all URL priorities
+  - `--cleanup` flag to remove stale queue entries
+
+- **EnhancedSearchService**: Database-backed search with advanced scoring:
+  - BM25 algorithm for relevance scoring
+  - Freshness boost (20% for content indexed < 7 days)
+  - Link popularity boost (up to 50% based on inbound links)
+  - Search suggestions based on token frequency
+  - Category filtering support
+
+- **CrawlerService Integration**: Updated to use RobotsTxtService:
+  - Automatic robots.txt compliance checking
+  - Respects crawl-delay directive from robots.txt
+  - Graceful handling of missing robots.txt files
 
 ## [2025-12-20 05:40:34] - AI Agent Meta-Governance
 

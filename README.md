@@ -11,36 +11,43 @@ The system operates on a daily refresh cycle, ensuring all indexed data is fresh
 The system follows a pipeline architecture with distinct phases:
 
 ```
-Crawl → Parse → Index → Cleanup → Upload → Cache → Serve
+Seed URLs → Normalize → Schedule → Fetch → Parse → Index → Search
 ```
 
-### Components
+### Core Components
+
+**Advanced Crawler Engine** ⭐ NEW  
+Database-backed crawling system with intelligent scheduling, robots.txt compliance, and global URL deduplication. Features:
+- **URL Normalization**: SHA256-based deduplication across all categories
+- **Robots.txt Service**: 24-hour cached compliance with crawl-delay support
+- **Crawl Scheduler**: Priority-based scheduling with depth and freshness factors
+- **Inverted Index**: Database-backed TF-IDF/BM25 scoring for fast retrieval
 
 **Laravel Orchestration Layer**  
 Laravel serves as the orchestration framework, providing job queuing, scheduling, and API routing. Business logic resides in dedicated service classes.
 
-- **Advanced Search Core**: Powered by TNTSearch (BM25 ranking), PHP-Stemmer, and fuzzy matching (Levenshtein).
-- **Intelligent Queries**: Supports logical operators (`AND`, `OR`, `NOT`), exact phrase matching (`""`), and automatic synonym expansion (e.g., AI → ML).
-- **Rich Results**: Result highlighting, confidence scores (0-1), match scores (1-10), and query suggestions for empty results.
-- **Advanced Filtering**: Filter by category, date range (`from_date`, `to_date`), and custom sorting (`relevance`, `date_desc`).
+- **Enhanced Search Core**: Database-backed BM25 ranking with freshness and link popularity boosts
+- **Intelligent Queries**: Supports logical operators (`AND`, `OR`, `NOT`), exact phrase matching (`""`), and automatic synonym expansion (e.g., AI → ML)
+- **Rich Results**: Result highlighting, confidence scores (0-1), match scores (1-10), and query suggestions
+- **Advanced Filtering**: Filter by category, date range (`from_date`, `to_date`), and custom sorting (`relevance`, `date_desc`)
 
 **Crawler Service**  
-Implements polite, ethical web crawling with robots.txt compliance, per domain rate limiting, and comprehensive HTTP validation. Handles 429, 5xx, redirects, and timeouts gracefully.
+Implements polite, ethical web crawling with robots.txt compliance (via RobotsTxtService), per-domain rate limiting, and comprehensive HTTP validation. Handles 429, 5xx, redirects, and timeouts gracefully. Respects crawl-delay directives.
 
 **Parser Service**  
-Extracts structured data from raw HTML including title, canonical URL, meta description, and publish date. Implements global duplicate detection via canonical URLs and content hashes across all categories.
+Extracts structured data from raw HTML including title, canonical URL, meta description, and publish date. Uses UrlNormalizerService for global duplicate detection via SHA256 hashes across all categories.
 
-**Indexer Service**  
-Manages incremental indexing by merging new records with existing JSON data from Google Drive. Enforces 5-day data retention, deduplicates records, and generates timestamped JSON output.
+**Index Engine Service** ⭐ NEW  
+Builds inverted index with tokenization, stopword removal, and optional stemming. Stores tokens and postings in database for efficient BM25 scoring.
 
 **Storage Service**  
-Manages JSON file lifecycle including generation, validation, upload to Google Drive, and integrity verification via checksums.
+Manages JSON file lifecycle including generation, validation, upload to Google Drive, and integrity verification via checksums. Google Drive serves as optional backup.
 
 **Search API**  
-Versioned REST API secured by Laravel Sanctum and Master API Key. Serves search results from local cache (synced and merged from Google Drive).
+Versioned REST API secured by Laravel Sanctum and Master API Key. Serves search results from database-backed inverted index with BM25 scoring.
 
 **Cache Manager**  
-Maintains local cache by downloading and merging ALL relevant index files from Google Drive for each category.
+Maintains local cache by downloading and merging ALL relevant index files from Google Drive for each category (legacy support).
 
 ## Data Lifecycle
 
@@ -225,46 +232,67 @@ If you prefer to run phases manually:
    php artisan crawl:category technology
    ```
 
-3. **Queue Worker**: Start the queue worker to process crawl jobs (run in a separate terminal).
-   ```bash
-   php artisan queue:work --stop-when-empty
-   
-   # To clear all pending jobs from the queue:
-   php artisan queue:clear
-   
-   # To see queue status and statistics:
-   php artisan queue:status
-   ```
+## Available Commands
 
-4. **Index**: Generate JSON search indexes once crawling is complete.
-   ```bash
-   php artisan index:generate
-   ```
+### Master Refresh (Recommended)
+```bash
+php artisan master:refresh [--async] [--fresh]
+```
+Orchestrates the entire crawl-parse-index-upload-cache cycle. Use `--async` for background execution, `--fresh` to wipe existing data.
 
-5. **Upload**: Sync your local search indexes to Google Drive.
-   ```bash
-   php artisan upload:index
-   ```
+### Advanced Crawler Commands ⭐ NEW
 
-6. **Initial Cache Sync**
+**Schedule Crawls**
+```bash
+php artisan crawler:schedule [--reprioritize] [--cleanup]
+```
+Schedule URLs for crawling based on priority and freshness. Use `--reprioritize` to recalculate all URL priorities, `--cleanup` to remove stale queue entries.
 
-If you have already generated indexes and uploaded them to Google Drive (e.g., from a local environment or a previous run), you **must** synchronize the production cache:
+**Monitor Crawler Health**
+```bash
+php artisan crawler:monitor [--hours=24]
+```
+Display comprehensive crawler health dashboard with database statistics, performance metrics, and HTTP status distribution.
 
+### Individual Phase Commands
+
+**Daily Crawl**
+```bash
+php artisan crawl:daily
+```
+Queue crawl jobs for seed URLs across all categories.
+
+**Generate Index**
+```bash
+php artisan index:generate [--category=technology]
+```
+Generate search index from parsed records. Optionally specify category.
+
+**Upload to Google Drive**
+```bash
+php artisan upload:index
+```
+Upload generated indexes to Google Drive (optional backup).
+
+**Refresh Local Cache**
 ```bash
 php artisan cache:refresh
 ```
+Download and merge all indexes from Google Drive into local cache.
 
-7. **Discover**: Get a random topic for discovery.
-   ```bash
-   curl "http://localhost:8000/api/v1/topic"
-   ```
+### Utility Commands
 
-8. **Search**: Start the server and visit `http://localhost:8000`.
-   ```bash
-   php artisan serve
-   ```
+**Trigger Refresh via API**
+```bash
+curl -X POST http://localhost:8000/api/v1/trigger-refresh \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
 
-
+**Search via API**
+```bash
+curl "http://localhost:8000/api/v1/search?q=artificial+intelligence&category=ai" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
 
 ## Documentation Reference
 
