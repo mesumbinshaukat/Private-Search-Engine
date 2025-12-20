@@ -9,11 +9,11 @@ use Illuminate\Support\Facades\Log;
 
 class SearchController extends Controller
 {
-    protected $advancedSearch;
+    protected $hybridSearch;
 
-    public function __construct(\App\Services\AdvancedSearchService $advancedSearch)
+    public function __construct(\App\Services\HybridSearchService $hybridSearch)
     {
-        $this->advancedSearch = $advancedSearch;
+        $this->hybridSearch = $hybridSearch;
     }
 
     public function search(SearchRequest $request)
@@ -47,13 +47,13 @@ class SearchController extends Controller
             ];
 
             if ($forceFuzzy) {
-                $results = $this->advancedSearch->fuzzySearch($query, $records, $category);
+                $results = $this->hybridSearch->fuzzySearch($query, $records, $category);
             } else {
-                $results = $this->advancedSearch->search($query, $records, $category, $options);
+                $results = $this->hybridSearch->search($query, $records, $category, $options);
             }
 
             if (empty($results)) {
-                $suggestions = $this->advancedSearch->suggest($query, $records);
+                $suggestions = $this->hybridSearch->suggest($query, $records);
                 
                 return response()->json([
                     'status' => 'error',
