@@ -36,6 +36,7 @@ class MasterRefreshJob implements ShouldQueue
             Log::info('--- Starting Master Refresh Cycle ---');
 
             $commands = [
+                ['name' => 'crawler:schedule', 'params' => ['--cleanup' => true]], // Populate crawl queue
                 ['name' => 'crawl:daily', 'params' => []],
                 ['name' => 'queue:work', 'params' => ['--stop-when-empty' => true]],
                 ['name' => 'index:generate', 'params' => []],

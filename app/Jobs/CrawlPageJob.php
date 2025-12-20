@@ -3,7 +3,9 @@
 namespace App\Jobs;
 
 use App\Models\CrawlJob;
+use App\Models\Url;
 use App\Services\CrawlerService;
+use App\Services\UrlNormalizerService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -26,9 +28,30 @@ class CrawlPageJob implements ShouldQueue
         $this->crawlJob = $crawlJob;
     }
 
-    public function handle(CrawlerService $crawler): void
+        public function handle(CrawlerService $crawler, UrlNormalizerService $normalizer): void
     {
         $this->crawlJob->update(['status' => CrawlJob::STATUS_PROCESSING]);
+
+        // Track URL in urls table
+        $normalized = $normalizer->normalize($this->crawlJob->url);
+        if ($normalized) {
+            $urlRecord = Url::firstOrCreate(
+                ['url_hash' => $normalized['hash']],
+                [
+                    'original_url' => $this->crawlJob->url,
+                    'normalized_url' => $normalized['normalized'],
+                    'host' => $normalized['host'],
+                    'path' => $normalized['path'],
+                    'category' => $this->crawlJob->category,
+                    'depth' => 0,
+                    'priority' => 50,
+                    'status' => 'pending',
+                ]
+            );
+            
+            // Update status to indicate crawling started
+            $urlRecord->update(['status' => 'pending']);
+        }
 
         Log::info('Starting crawl', [
             'url' => $this->crawlJob->url,
@@ -43,6 +66,15 @@ class CrawlPageJob implements ShouldQueue
                 'http_status' => $result['http_status'],
                 'crawled_at' => now(),
             ]);
+            
+            // Update URL record status
+            if (isset($urlRecord)) {
+                $urlRecord->update([
+                    'status' => 'crawled',
+                    'http_status' => $result['http_status'],
+                    'last_crawled_at' => now(),
+                ]);
+            }
 
             Log::info('Crawl completed', [
                 'url' => $this->crawlJob->url,
@@ -60,6 +92,15 @@ class CrawlPageJob implements ShouldQueue
                     'failed_reason' => 'Rate limited by server (429)',
                 ]);
                 
+                // Update URL record
+                if (isset($urlRecord)) {
+                    $urlRecord->update([
+                        'status' => 'failed',
+                        'http_status' => 429,
+                        'failed_reason' => 'Rate limited by server',
+                    ]);
+                }
+                
                 // Cache this URL as rate-limited to prevent re-queuing
                 \Illuminate\Support\Facades\Cache::put("failed_url:" . md5($this->crawlJob->url), true, now()->addDay());
                 
@@ -76,6 +117,15 @@ class CrawlPageJob implements ShouldQueue
                 'robots_txt_allowed' => $result['robots_txt_allowed'] ?? true,
                 'failed_reason' => $result['error'],
             ]);
+            
+            // Update URL record
+            if (isset($urlRecord)) {
+                $urlRecord->update([
+                    'status' => 'failed',
+                    'http_status' => $result['http_status'] ?? null,
+                    'failed_reason' => $result['error'],
+                ]);
+            }
 
             Log::warning('Crawl failed', [
                 'url' => $this->crawlJob->url,
