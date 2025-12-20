@@ -1,4 +1,12 @@
-﻿## [2025-12-20 18:15:00] - Advanced Crawler Engine Reliability & Auth Fixes
+﻿## [2025-12-21 03:17:41] - Production Stability & Command Registry Fixes
+
+### Fixed
+- **Command Auto-Discovery**: Resolved `CommandNotFoundException` in web-triggered Artisan calls by explicitly registering all 12 custom commands in `bootstrap/app.php`.
+- **Index Metadata Conflict**: Fixed `SQLSTATE[23000]` unique constraint violation in `IndexerService` by switching from `create()` to `updateOrCreate()`, allowing multiple index runs per day.
+- **Crawl Job Visibility**: Enhanced `CrawlPageJob` with detailed logging for every attempt (delay, count, reasons) to clarify why specific URLs fail to crawl.
+- **Scheduler Reliability**: Improved "Poor Man's Cron" in `AppServiceProvider` with robust lock handling (using `finally`), execution time metrics, and detailed debug logs.
+
+## [2025-12-20 18:15:00] - Advanced Crawler Engine Reliability & Auth Fixes
 
 ### Fixed
 - **API Authentication**: Added Bearer token support to `ApiMasterKeyMiddleware.php`. Authentication now accepts `X-API-MASTER-KEY` header, `api_master_key` query param, OR `Bearer` token (using master key).

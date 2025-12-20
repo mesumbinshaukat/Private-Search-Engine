@@ -11,6 +11,20 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    ->withCommands([
+        \App\Console\Commands\AuthorizeGoogleDriveCommand::class,
+        \App\Console\Commands\ClearQueueCommand::class,
+        \App\Console\Commands\CrawlCategoryCommand::class,
+        \App\Console\Commands\CrawlDailyCommand::class,
+        \App\Console\Commands\GenerateIndexCommand::class,
+        \App\Console\Commands\MasterRefreshCommand::class,
+        \App\Console\Commands\MigrateParsedRecordsCommand::class,
+        \App\Console\Commands\MonitorCommand::class,
+        \App\Console\Commands\QueueStatusCommand::class,
+        \App\Console\Commands\RefreshCacheCommand::class,
+        \App\Console\Commands\ScheduleCrawlCommand::class,
+        \App\Console\Commands\UploadIndexCommand::class,
+    ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'master_key' => \App\Http\Middleware\ApiMasterKeyMiddleware::class,

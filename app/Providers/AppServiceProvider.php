@@ -44,9 +44,20 @@ class AppServiceProvider extends ServiceProvider
             $lock = \Illuminate\Support\Facades\Cache::lock('poor-mans-cron', 60);
             if ($lock->get()) {
                 try {
+                    $startTime = microtime(true);
+                    \Illuminate\Support\Facades\Log::debug('Starting Poor Man\'s Cron scheduler execution');
+                    
                     \Illuminate\Support\Facades\Artisan::call('schedule:run');
+                    
+                    $duration = round((microtime(true) - $startTime) * 1000, 2);
+                    \Illuminate\Support\Facades\Log::info("Poor Man's Cron executed successfully ({$duration}ms)");
                 } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::warning('Poor Man\'s Cron failed: ' . $e->getMessage());
+                    \Illuminate\Support\Facades\Log::warning('Poor Man\'s Cron failed: ' . $e->getMessage(), [
+                        'exception' => get_class($e),
+                        'trace' => substr($e->getTraceAsString(), 0, 500)
+                    ]);
+                } finally {
+                    $lock->release();
                 }
             }
         }

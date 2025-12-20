@@ -172,10 +172,14 @@ class CrawlPageJob implements ShouldQueue
             Log::warning('Crawl failed', [
                 'url' => $this->crawlJob->url,
                 'error' => $result['error'],
+                'attempt' => $this->attempts(),
+                'max_tries' => $this->tries ?? 1,
             ]);
 
             if ($result['should_retry'] ?? false) {
-                $this->release($this->backoff[$this->attempts() - 1] ?? 60);
+                $delay = $this->backoff[$this->attempts() - 1] ?? 60;
+                Log::info('Releasing crawl job for retry', ['url' => $this->crawlJob->url, 'delay' => $delay]);
+                $this->release($delay);
             }
 
             if ($result['should_backoff'] ?? false) {
