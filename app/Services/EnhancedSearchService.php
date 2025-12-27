@@ -143,7 +143,7 @@ class EnhancedSearchService
         $words = preg_split('/\s+/', $query, -1, PREG_SPLIT_NO_EMPTY);
         
         // Filter short words
-        return array_filter($words, fn($word) => strlen($word) >= 3);
+        return array_filter($words, fn($word) => strlen($word) >= config('indexer.min_token_length', 2));
     }
 
     /**

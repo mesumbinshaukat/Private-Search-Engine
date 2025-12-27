@@ -84,7 +84,7 @@ class IndexEngineService
         $tokens = [];
         foreach ($words as $word) {
             // Skip if too short or is stopword
-            if (strlen($word) < config('indexer.min_token_length', 3)) {
+            if (strlen($word) < config('indexer.min_token_length', 2)) {
                 continue;
             }
             

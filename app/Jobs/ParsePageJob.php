@@ -160,7 +160,7 @@ class ParsePageJob implements ShouldQueue
 
     private function discoverLinks(ParserService $parser, string $html): void
     {
-        $maxCrawls = config('crawler.max_crawls_per_category', 10);
+        $maxCrawls = config('crawler.max_crawls_per_category', 2000);
         $today = now()->format('Y-m-d');
         $cacheKey = "crawl_count:{$this->crawlJob->category}:{$today}";
 
@@ -174,8 +174,12 @@ class ParsePageJob implements ShouldQueue
         $normalizer = app(UrlNormalizerService::class);
         $allowedExternal = config('crawler.allowed_external_domains', []);
         
-        // Smart filtering keywords based on category
-        $keywords = ['tech', 'ai', 'sport', 'business', 'news', 'politics', 'science'];
+        // Comprehensive keyword list for "Google-like" discovery across domains
+        $keywords = [
+            'tech', 'ai', 'sport', 'business', 'news', 'politics', 'science', 
+            'web', 'software', 'cloud', 'dev', 'finance', 'economy', 'blog', 
+            'article', 'world', 'global', 'review', 'guide', 'tutorial'
+        ];
 
         foreach ($links as $link) {
             $normalizedLink = $normalizer->normalize($link);

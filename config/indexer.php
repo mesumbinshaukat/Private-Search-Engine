@@ -5,6 +5,8 @@ return [
     
     'max_data_age_days' => env('INDEXER_MAX_DATA_AGE_DAYS', 5),
     
+    'min_token_length' => env('INDEXER_MIN_TOKEN_LENGTH', 2),
+
     'schema_version' => env('INDEXER_SCHEMA_VERSION', '1.0'),
     
     'json_pretty_print' => env('INDEXER_JSON_PRETTY_PRINT', true),
