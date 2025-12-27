@@ -172,14 +172,11 @@ class ParsePageJob implements ShouldQueue
         $links = $parser->extractLinks($html, $this->crawlJob->url);
         $domain = parse_url($this->crawlJob->url, PHP_URL_HOST);
         $normalizer = app(UrlNormalizerService::class);
-        $allowedExternal = config('crawler.allowed_external_domains', []);
+        $discoveryService = app(\App\Services\CategoryAwareDiscoveryService::class);
         
-        // Comprehensive keyword list for "Google-like" discovery across domains
-        $keywords = [
-            'tech', 'ai', 'sport', 'business', 'news', 'politics', 'science', 
-            'web', 'software', 'cloud', 'dev', 'finance', 'economy', 'blog', 
-            'article', 'world', 'global', 'review', 'guide', 'tutorial'
-        ];
+        // Get current URL depth
+        $currentUrl = Url::where('normalized_url', $this->crawlJob->url)->first();
+        $currentDepth = $currentUrl?->depth ?? 0;
 
         foreach ($links as $link) {
             $normalizedLink = $normalizer->normalize($link);
@@ -195,27 +192,14 @@ class ParsePageJob implements ShouldQueue
                 break;
             }
 
-            // Cross-domain discovery logic
-            if ($linkHost !== $domain) {
-                if (!empty($allowedExternal)) {
-                    // Only follow if in the allowed list
-                    if (!in_array($linkHost, $allowedExternal)) {
-                        continue;
-                    }
-                } else {
-                    // Smart fallback: check if host/path contains category-relevant keywords
-                    $searchable = strtolower($linkUrl);
-                    $hasKeyword = false;
-                    foreach ($keywords as $kw) {
-                        if (str_contains($searchable, $kw)) {
-                            $hasKeyword = true;
-                            break;
-                        }
-                    }
-                    if (!$hasKeyword) {
-                        continue;
-                    }
-                }
+            // Use category-aware discovery service to determine if link should be followed
+            if (!$discoveryService->shouldFollowLink(
+                $this->crawlJob->url,
+                $this->crawlJob->category,
+                $linkUrl,
+                $currentDepth + 1
+            )) {
+                continue;
             }
 
             // Check if URL has failed before (rate limited, etc)

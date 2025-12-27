@@ -14,4 +14,10 @@ Artisan::command('inspire', function () {
     ->withoutOverlapping()
     ->runInBackground();
 
+// Schedule crawler to discover and queue new URLs hourly
+\Illuminate\Support\Facades\Schedule::command('crawler:schedule --cleanup')
+    ->hourly()
+    ->withoutOverlapping()
+    ->runInBackground();
+
 \Illuminate\Support\Facades\Schedule::job(new \App\Jobs\MasterRefreshJob)->daily();

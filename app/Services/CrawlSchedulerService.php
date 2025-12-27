@@ -82,16 +82,24 @@ class CrawlSchedulerService
      */
     public function calculateNextCrawl(Url $url): \DateTime
     {
-        $baseInterval = 7; // days
+        // Adaptive intervals based on depth
+        $intervals = [
+            0 => 1,   // Seed URLs: daily
+            1 => 2,   // Depth 1: every 2 days
+            2 => 3,   // Depth 2: every 3 days
+            3 => 7,   // Depth 3: weekly
+            4 => 14,  // Depth 4: bi-weekly
+        ];
 
-        // Adjust based on depth
-        $depthMultiplier = 1 + ($url->depth * 0.5);
-        
-        // Adjust based on change frequency (if we have history)
-        // For now, use base interval
-        $interval = $baseInterval * $depthMultiplier;
+        $baseDays = $intervals[$url->depth] ?? 30; // Deep URLs: monthly
 
-        return now()->addDays((int) $interval);
+        // Boost priority URLs (high inbound links)
+        $inboundCount = $url->inboundLinks()->count();
+        if ($inboundCount > 5) {
+            $baseDays = max(1, $baseDays - 1); // Crawl 1 day sooner
+        }
+
+        return now()->addDays($baseDays);
     }
 
     /**
