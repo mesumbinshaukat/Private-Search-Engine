@@ -63,8 +63,20 @@ class StorageService
                         'file_id' => $fileId,
                     ]);
 
-                    // Automatically cleanup local file after successful upload
-                    Storage::delete($metadata->file_path);
+                    // Only delete local file after successful upload and verification
+                    // This ensures data is never lost even if upload fails
+                    try {
+                        Storage::delete($metadata->file_path);
+                        Log::info('Local index file cleaned up after successful upload', [
+                            'category' => $metadata->category,
+                            'file_path' => $metadata->file_path,
+                        ]);
+                    } catch (\Exception $e) {
+                        Log::warning('Failed to delete local file after upload', [
+                            'file_path' => $metadata->file_path,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
 
                     return [
                         'success' => true,
