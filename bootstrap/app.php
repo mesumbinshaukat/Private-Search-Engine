@@ -12,18 +12,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withCommands([
-        \App\Console\Commands\AuthorizeGoogleDriveCommand::class,
-        \App\Console\Commands\ClearQueueCommand::class,
-        \App\Console\Commands\CrawlCategoryCommand::class,
-        \App\Console\Commands\CrawlDailyCommand::class,
-        \App\Console\Commands\GenerateIndexCommand::class,
-        \App\Console\Commands\MasterRefreshCommand::class,
-        \App\Console\Commands\MigrateParsedRecordsCommand::class,
-        \App\Console\Commands\MonitorCommand::class,
-        \App\Console\Commands\QueueStatusCommand::class,
-        \App\Console\Commands\RefreshCacheCommand::class,
-        \App\Console\Commands\ScheduleCrawlCommand::class,
-        \App\Console\Commands\UploadIndexCommand::class,
+        __DIR__.'/../app/Console/Commands',
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
