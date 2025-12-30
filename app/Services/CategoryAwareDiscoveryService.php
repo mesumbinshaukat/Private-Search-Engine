@@ -82,6 +82,14 @@ class CategoryAwareDiscoveryService
             return true;
         }
 
+        Log::info('Link rejected', [
+            'target' => $targetUrl,
+            'category' => $category,
+            'depth' => $depth,
+            'score' => $relevanceScore,
+            'threshold' => $threshold,
+        ]);
+
         return false;
     }
 
