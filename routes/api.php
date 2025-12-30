@@ -24,7 +24,7 @@ Route::prefix('v1')->group(function () {
                     ], 409);
                 }
 
-                \Illuminate\Support\Facades\Artisan::call('master:refresh', ['--async' => true]);
+                \App\Jobs\MasterRefreshJob::dispatch();
                 return response()->json(['status' => 'success', 'message' => 'Master refresh triggered in background']);
             } catch (\Exception $e) {
                 \Illuminate\Support\Facades\Log::error('Failed to trigger master refresh', [
