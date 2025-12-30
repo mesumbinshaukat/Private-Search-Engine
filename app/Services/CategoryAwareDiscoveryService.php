@@ -62,11 +62,11 @@ class CategoryAwareDiscoveryService
         
         // Depth-based thresholds
         $thresholds = [
-            0 => 30,  // Seed URLs: very permissive
-            1 => 40,  // Depth 1: permissive
-            2 => 50,  // Depth 2: moderate
-            3 => 60,  // Depth 3: strict
-            4 => 70,  // Depth 4: very strict
+            0 => 15,  // Seed URLs: very permissive
+            1 => 15,  // Depth 1: permissive (accepts single pattern match)
+            2 => 25,  // Depth 2: moderate (needs path + pattern, or authority)
+            3 => 40,  // Depth 3: strict
+            4 => 50,  // Depth 4: very strict
         ];
 
         $threshold = $thresholds[$depth] ?? 80;

@@ -26,13 +26,13 @@ return [
     ],
 
     // Discovery Settings
-    'max_crawls_per_category' => env('CRAWLER_MAX_CRAWLS_PER_CATEGORY', 1000),
+    'max_crawls_per_category' => env('CRAWLER_MAX_CRAWLS_PER_CATEGORY', 5000),
     'allowed_external_domains' => array_filter(explode(',', env('CRAWLER_ALLOWED_EXTERNAL_DOMAINS', ''))),
     'max_depth' => env('CRAWLER_MAX_DEPTH', 5),
     
     // Advanced Fetch Engine
     'fetch_workers' => env('CRAWLER_FETCH_WORKERS', 5),
-    'fetch_batch_size' => env('CRAWLER_FETCH_BATCH_SIZE', 100),
+    'fetch_batch_size' => env('CRAWLER_FETCH_BATCH_SIZE', 500),
     
     // User Agent Rotation (for anti-blocking)
     'user_agents' => [
